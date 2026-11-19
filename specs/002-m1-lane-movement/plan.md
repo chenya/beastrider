@@ -78,7 +78,8 @@ Constitution v1.3.2. ✅ = passes, ➖ = does not apply to M1.
 | **Code Style: shared naming** | ✅ | ✅ | `Hero` in Rust, the editor and GDScript; actions `p1_*` match `player_index`. |
 | **Quality Gate** | ✅ | ✅ | `cargo fmt --check`, build and clippy with 0 warnings, `cargo test`, 0 GDScript warnings, and every check passed by playing (quickstart 1–14). |
 
-**Result**: both passes are green and nothing goes in Complexity Tracking.
+**Result**: both passes are green. The T027 review after implementation found one recorded
+departure (scenes built by script at the owner's request); see Complexity Tracking.
 
 ## Spec alignment
 
@@ -147,7 +148,11 @@ unit tests stay next to the code they test.
 
 ## Complexity Tracking
 
-No departures from the constitution, so there are no rows.
+Found in the T027 compliance review:
+
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+| --- | --- | --- |
+| `godot/main.tscn` was built and changed by headless Godot scripts (`PackedScene.pack` + `ResourceSaver.save`) in T013 and T015, not by hand in the editor (Tech: "Scenes, nodes and animation are built in the Godot editor"). M0's T020 scene was built the same way and was not recorded at the time. | The owner asked the agent to do these editor tasks. The agent cannot use the editor GUI, and godot-mcp's scene tools cannot run in this project because its helper script is untyped and the project treats untyped declarations as errors. The result is an ordinary `.tscn` that opens and edits in the editor. | Building by hand in the editor was the default; the owner chose to hand the task over. Relaxing the untyped-declaration error so godot-mcp could run was rejected because it would break the GDScript style rule. |
 
 ## Follow-ups (outside M1)
 

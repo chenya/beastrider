@@ -101,6 +101,12 @@ Behaviour marked *checked* was confirmed against the installed Godot 4.7.2 on 20
   hero that starts outside the lane at the nearest point inside on the first tick (spec edge case).
   Measuring the width from `Body` keeps the hero's size a scene choice (Principle IV: looks are
   not tuning) with no copy of it in code.
+- **Sliding at full speed** (added during T014): clamping alone made a hero pressed against a
+  limit slide at only 71 % speed when holding a diagonal, because `get_vector` shortens each axis
+  of a diagonal to about 0.71. The spec (US1 scenario 6) asks for normal speed along a limit. So
+  before moving, `step` drops the part of the input that pushes into a limit the hero is already
+  on and gives the input's full length to the other axis. A diagonal in open space is unchanged,
+  so it is still never faster than a straight line.
 - **Alternatives considered**: refusing a move that would leave the area (the hero stops short of
   the edge at high speed); an exported `half_width` on the hero (a second copy of the size that
   can disagree with the shape).

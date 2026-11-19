@@ -36,6 +36,7 @@ Inputs: current position, input vector (from `Input.get_vector`, length ≤ 1), 
 limits. Output: the new position.
 
 ```text
+input   = input with any part that pushes into a limit already reached moved to the other axis
 moved   = position + (input.x × horizontal_speed, input.y × vertical_speed) × delta
 result  = (clamp(moved.x, limits.min_x, limits.max_x), clamp(moved.y, limits.min_y, limits.max_y))
 ```
