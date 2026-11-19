@@ -43,15 +43,15 @@ Each session ends with something that builds, and from Session 2 on, something y
 
 **Purpose**: Toolchain installed, both folders exist, and Godot loads an (empty) Rust library.
 
-- [ ] T001 Create the root `.gitignore` containing exactly the two rules `rust/target/` and `godot/.godot/` (one per line, with a short comment above each) in `.gitignore`
-- [ ] T002 [P] Confirm the installed engine: `godot --version` (resolving to `~/.local/bin/godot`) prints `4.7.2.stable.official.ed1daf0bf` (quickstart.md "Prerequisites" step 2, research.md R1). If it prints anything else, stop and update research.md R1 first (outside the repo, nothing to commit)
-- [ ] T003 [P] Create `rust/Cargo.toml`: `[package] name = "beastrider"`, `edition = "2024"`, `rust-version = "1.94"`, `publish = false`; `[lib] crate-type = ["cdylib"]`; `[dependencies] godot = { version = "=0.5.5", features = ["api-4-6"] }` (exact pin and explicit API level per research.md R2; no other dependencies)
-- [ ] T004 [P] Create `rust/rust-toolchain.toml` with `[toolchain] channel = "1.100.0"` and `components = ["rustfmt", "clippy"]` (research.md R3)
-- [ ] T005 [P] Create `rust/rustfmt.toml` containing `max_width = 100` (constitution, Code Style: Rust)
-- [ ] T006 Create `rust/src/lib.rs` with the extension entry point: a `///`-documented unit struct `BeastriderExtension` and `#[gdextension] unsafe impl ExtensionLibrary for BeastriderExtension {}` preceded by a `// SAFETY:` comment explaining that gdext requires this `unsafe impl` as the library's entry point and that it adds no unsafe code of its own (the only `unsafe` allowed in game code). Then run `cargo build` in `rust/` and confirm it creates `rust/target/debug/libbeastrider.so` and `rust/Cargo.lock` (depends on T003–T005)
-- [ ] T007 [P] Create `godot/project.godot` (`config_version=5`) with: `application/config/name="Beastrider"`, `application/config/features=PackedStringArray("4.7")` (the engine version the project is saved with; the Rust API level is separate and stays 4.6), `application/run/main_scene="res://main.tscn"`, `display/window/size/viewport_width=1280`, `display/window/size/viewport_height=720`, `display/window/vsync/vsync_mode=1` (Enabled, written out explicitly), `rendering/renderer/rendering_method="gl_compatibility"`, `rendering/renderer/rendering_method.mobile="gl_compatibility"`, `rendering/environment/defaults/default_clear_color=Color(0.05, 0.05, 0.07, 1)` (dark background), and `debug/gdscript/warnings/untyped_declaration=2` (Error). Leave the Linux display driver at its default (X11, research.md R5)
-- [ ] T008 [P] Create `godot/beastrider.gdextension`: `[configuration]` with `entry_symbol = "gdext_rust_init"`, `compatibility_minimum = 4.6`, `reloadable = true`; `[libraries]` with `linux.debug.x86_64 = "res://../rust/target/debug/libbeastrider.so"` and `linux.release.x86_64 = "res://../rust/target/release/libbeastrider.so"` (research.md R7)
-- [ ] T009 Import the project once headless with `godot --headless --path godot --editor --quit` and confirm the output has no errors about `beastrider.gdextension` or loading `libbeastrider.so` (FR-011). It is expected to warn that `res://main.tscn` does not exist yet. Confirm `git status` does not show `godot/.godot/` or `rust/target/` (depends on T001, T002, T006–T008)
+- [X] T001 Create the root `.gitignore` containing exactly the two rules `rust/target/` and `godot/.godot/` (one per line, with a short comment above each) in `.gitignore`
+- [X] T002 [P] Confirm the installed engine: `godot --version` (resolving to `~/.local/bin/godot`) prints `4.7.2.stable.official.ed1daf0bf` (quickstart.md "Prerequisites" step 2, research.md R1). If it prints anything else, stop and update research.md R1 first (outside the repo, nothing to commit)
+- [X] T003 [P] Create `rust/Cargo.toml`: `[package] name = "beastrider"`, `edition = "2024"`, `rust-version = "1.94"`, `publish = false`; `[lib] crate-type = ["cdylib"]`; `[dependencies] godot = { version = "=0.5.5", features = ["api-4-6"] }` (exact pin and explicit API level per research.md R2; no other dependencies)
+- [X] T004 [P] Create `rust/rust-toolchain.toml` with `[toolchain] channel = "1.100.0"` and `components = ["rustfmt", "clippy"]` (research.md R3)
+- [X] T005 [P] Create `rust/rustfmt.toml` containing `max_width = 100` (constitution, Code Style: Rust)
+- [X] T006 Create `rust/src/lib.rs` with the extension entry point: a `///`-documented unit struct `BeastriderExtension` and `#[gdextension] unsafe impl ExtensionLibrary for BeastriderExtension {}` preceded by a `// SAFETY:` comment explaining that gdext requires this `unsafe impl` as the library's entry point and that it adds no unsafe code of its own (the only `unsafe` allowed in game code). Then run `cargo build` in `rust/` and confirm it creates `rust/target/debug/libbeastrider.so` and `rust/Cargo.lock` (depends on T003–T005)
+- [X] T007 [P] Create `godot/project.godot` (`config_version=5`) with: `application/config/name="Beastrider"`, `application/config/features=PackedStringArray("4.7")` (the engine version the project is saved with; the Rust API level is separate and stays 4.6), `application/run/main_scene="res://main.tscn"`, `display/window/size/viewport_width=1280`, `display/window/size/viewport_height=720`, `display/window/vsync/vsync_mode=1` (Enabled, written out explicitly), `rendering/renderer/rendering_method="gl_compatibility"`, `rendering/renderer/rendering_method.mobile="gl_compatibility"`, `rendering/environment/defaults/default_clear_color=Color(0.05, 0.05, 0.07, 1)` (dark background), and `debug/gdscript/warnings/untyped_declaration=2` (Error). Leave the Linux display driver at its default (X11, research.md R5)
+- [X] T008 [P] Create `godot/beastrider.gdextension`: `[configuration]` with `entry_symbol = "gdext_rust_init"`, `compatibility_minimum = 4.6`, `reloadable = true`; `[libraries]` with `linux.debug.x86_64 = "res://../rust/target/debug/libbeastrider.so"` and `linux.release.x86_64 = "res://../rust/target/release/libbeastrider.so"` (research.md R7)
+- [X] T009 Import the project once headless with `godot --headless --path godot --editor --quit` and confirm the output has no errors about `beastrider.gdextension` or loading `libbeastrider.so` (FR-011). It is expected to warn that `res://main.tscn` does not exist yet. Confirm `git status` does not show `godot/.godot/` or `rust/target/` (depends on T001, T002, T006–T008)
 
 **Checkpoint**: Godot loads the Rust library without errors. Nothing is on screen yet.
 
@@ -65,15 +65,15 @@ without it.
 
 **⚠️ CRITICAL**: US1 cannot start until this phase is complete
 
-- [ ] T010 [P] Create `godot/data/tuning.json` containing exactly `{ "drifting_square": { "speed": 160 } }`, formatted over several lines with 2-space indentation. 160 px/s crosses 1280 px in about 8 s (spec Assumptions)
-- [ ] T011 [P] In `rust/src/tuning.rs`, define:
+- [X] T010 [P] Create `godot/data/tuning.json` containing exactly `{ "drifting_square": { "speed": 160 } }`, formatted over several lines with 2-space indentation. 160 px/s crosses 1280 px in about 8 s (spec Assumptions)
+- [X] T011 [P] In `rust/src/tuning.rs`, define:
   - a `///`-documented constant `TUNING_PATH: &str = "res://data/tuning.json"` (a file path, not a tuning value);
   - a `TuningError` enum with one variant per cause in contracts/drifting-square.md "Errors": file missing or unreadable (path + read error), invalid JSON (path + line + parser message), missing field (path + field path), and invalid value (path + field path + the bad value). Implement `Display` so every message names the file, the field path where there is one, and the problem, and `impl std::error::Error`;
   - `pub struct SquareTuning { speed: f32 }`, with a checked constructor `SquareTuning::try_new(speed: f64) -> Result<SquareTuning, TuningError>` that accepts only values that are "finite and `>= 0` (`0` = stays still)", plus an accessor `speed(&self) -> f32`. There is no `Default` and no other way to build it, so an invalid `SquareTuning` cannot exist (data-model.md).
 
   `///` docs on every public item
-- [ ] T012 Add `#[cfg(test)] mod tests` to `rust/src/tuning.rs` covering `SquareTuning::try_new`: accepts `0.0` and `160.0`; rejects `-5.0`, `f64::NAN`, `f64::INFINITY`; and the `Display` of a rejection contains `res://data/tuning.json`, `drifting_square.speed` and the bad value (depends on T011)
-- [ ] T013 In `rust/src/tuning.rs`, implement `pub fn load_square_tuning() -> Result<SquareTuning, TuningError>` (or with a `path: &str` parameter, called with `TUNING_PATH`) as follows:
+- [X] T012 Add `#[cfg(test)] mod tests` to `rust/src/tuning.rs` covering `SquareTuning::try_new`: accepts `0.0` and `160.0`; rejects `-5.0`, `f64::NAN`, `f64::INFINITY`; and the `Display` of a rejection contains `res://data/tuning.json`, `drifting_square.speed` and the bad value (depends on T011)
+- [X] T013 In `rust/src/tuning.rs`, implement `pub fn load_square_tuning() -> Result<SquareTuning, TuningError>` (or with a `path: &str` parameter, called with `TUNING_PATH`) as follows:
   1. read the whole file through gdext's file access (`GFile` / `FileAccess`);
   2. parse it with a Godot `Json` instance so the error line and message are available;
   3. require a top-level Dictionary with key `drifting_square`, which must be a Dictionary with key `speed`;
@@ -81,7 +81,7 @@ without it.
   5. finish with `SquareTuning::try_new`.
 
   Unknown keys are ignored (contracts/tuning-data.md rule 2). There is no fallback value anywhere (Principle IV). Use `?` and `Result` throughout; no `unwrap()` and no `panic!` (depends on T011)
-- [ ] T014 Add `mod tuning;` to `rust/src/lib.rs`, then in `rust/` run `cargo build` and `cargo test`. Both pass (dead-code warnings for the not-yet-used loader are acceptable until T017) (depends on T012, T013)
+- [X] T014 Add `mod tuning;` to `rust/src/lib.rs`, then in `rust/` run `cargo build` and `cargo test`. Both pass (dead-code warnings for the not-yet-used loader are acceptable until T017) (depends on T012, T013)
 
 **Checkpoint**: The tuning format exists, and the speed checks are unit-tested.
 
@@ -98,7 +98,7 @@ scenarios 1–3).
 
 ### Tests for User Story 1
 
-- [ ] T015 [P] [US1] In `rust/src/drifting_square.rs`, write the pure function `fn wrap_x(x: f32, width: f32, viewport_width: f32) -> f32` as `(x + width).rem_euclid(viewport_width + width) - width` (research.md R9; the result is always in `[-width, viewport_width)`), with `#[cfg(test)]` tests:
+- [X] T015 [P] [US1] In `rust/src/drifting_square.rs`, write the pure function `fn wrap_x(x: f32, width: f32, viewport_width: f32) -> f32` as `(x + width).rem_euclid(viewport_width + width) - width` (research.md R9; the result is always in `[-width, viewport_width)`), with `#[cfg(test)]` tests:
   - a value already in range stays the same;
   - `x == viewport_width` maps to `-width`;
   - a value just past the right edge lands just after `-width`;
@@ -108,7 +108,7 @@ scenarios 1–3).
 
 ### Implementation for User Story 1
 
-- [ ] T016 [US1] In `rust/src/drifting_square.rs`, implement the class from contracts/drifting-square.md:
+- [X] T016 [US1] In `rust/src/drifting_square.rs`, implement the class from contracts/drifting-square.md:
   - Declaration: `#[derive(GodotClass)] #[class(base = Node2D)] pub struct DriftingSquare` with fields `tuning: Option<SquareTuning>`, `width: f32` and `base: Base<Node2D>`, initialised via `#[class(init)]` or an `INode2D::init` that sets `tuning = None` and `width = 0.0`. These are "not loaded yet" markers, not tuning values.
   - `ready()`: call `tuning::load_square_tuning()`. Then fetch the child `Body` as a `Control` with a non-panicking lookup (`try_get_node_as`), and require its width `> 0`. On any failure, report exactly one `godot_error!` whose message starts with `DriftingSquare:` (for tuning failures, followed by the `TuningError` `Display`; for `Body`, the node path and the problem), and leave `tuning` as `None` (stopped).
   - `process(delta)`: do nothing while stopped. Otherwise `x += speed * delta as f32`, then `x = wrap_x(x, width, viewport width from get_viewport_rect())`. Never touch `position.y`.
@@ -116,15 +116,15 @@ scenarios 1–3).
   - Docs: `///` on the struct and on `speed()`. No literal speed value anywhere (FR-008).
 
   (depends on T014, T015)
-- [ ] T017 [US1] Add `mod drifting_square;` to `rust/src/lib.rs`, run `cargo build` in `rust/`, then open the editor (`godot --editor --path godot`) and confirm `DriftingSquare` appears in the Create New Node dialog under `Node2D` (depends on T016)
-- [ ] T018 [P] [US1] Create `godot/ui/speed_label.gd`:
+- [X] T017 [US1] Add `mod drifting_square;` to `rust/src/lib.rs`, run `cargo build` in `rust/`, then open the editor (`godot --editor --path godot`) and confirm `DriftingSquare` appears in the Create New Node dialog under `Node2D` (depends on T016)
+- [X] T018 [P] [US1] Create `godot/ui/speed_label.gd`:
   - `extends Label`, then a `##` class doc comment.
   - One typed export, `@export var square: DriftingSquare`, with a `##` doc.
   - `func _process(_delta: float) -> void:` setting `text = "Speed: %d px/s" % roundi(square.speed())`.
   - No other variables. Tabs for indentation, and code order as in the constitution's GDScript section.
 
   (depends on T017, so that the `DriftingSquare` type is known to the editor)
-- [ ] T019 [P] [US1] Create `godot/ui/fps_label.gd`: `extends Label`, a `##` class doc comment, and `func _process(_delta: float) -> void:` setting `text = "FPS: %d" % Engine.get_frames_per_second()`. No variables. Tabs.
+- [X] T019 [P] [US1] Create `godot/ui/fps_label.gd`: `extends Label`, a `##` class doc comment, and `func _process(_delta: float) -> void:` setting `text = "FPS: %d" % Engine.get_frames_per_second()`. No variables. Tabs.
 - [ ] T020 [US1] (owner) In the Godot editor, build and save `godot/main.tscn`:
   - root `Node2D` named `Main`;
   - child `DriftingSquare` at position `(0, 328)`, with child `ColorRect` named `Body` at `(0, 0)`, size `64×64`, in a bright saturated placeholder colour such as orange `#E8792B`;
