@@ -1,0 +1,14 @@
+[package]
+name = "beastrider"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Exact pin, and the API level set explicitly so it never drifts past the
+# engine (see specs/001-m0-setup/research.md R2).
+godot = { version = "=0.5.5", features = ["api-4-6"] }
