@@ -162,7 +162,8 @@ clock with the window in front, watching the FPS counter. Then run the Quality G
   hero is placed at the nearest point inside the lane and the screen, and stays there until moved.
 - **Very high speed in the tuning file** (the hero would cross the lane in one or two frames): the
   hero still never ends a frame outside the lane or the screen.
-- **Speed of 0** for one axis: the hero cannot move along that axis; the other axis works normally.
+- **Speed of 0**: invalid, like a negative speed. Both speeds must be greater than 0 (owner's
+  plan input for M1); a 0 is reported as a bad value and the hero stays still.
 - **Invalid tuning data** (a value missing, not a number, or negative; lane top not above lane
   bottom; lane outside the screen): the game reports a clear error in the output panel naming the
   file, field and problem, as in M0, and the hero stays still. The game does not crash and does not
