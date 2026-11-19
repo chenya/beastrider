@@ -1,30 +1,44 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://ui/speed_label.gd" id="1_0xm2m"]
+[ext_resource type="Script" path="res://world/lane_band.gd" id="1_0xm2m"]
 [ext_resource type="Script" path="res://ui/fps_label.gd" id="2_h2yge"]
 
-[node name="Main" type="Node2D" unique_id=834148524]
+[node name="Main" type="Node2D" unique_id=1385241709]
 
-[node name="DriftingSquare" type="DriftingSquare" parent="." unique_id=20975412]
-position = Vector2(0, 328)
-
-[node name="Body" type="ColorRect" parent="DriftingSquare" unique_id=787930726]
-offset_right = 64.0
-offset_bottom = 64.0
-color = Color(0.9098039, 0.4745098, 0.16862746, 1)
-
-[node name="Hud" type="CanvasLayer" parent="." unique_id=1748180219]
-
-[node name="SpeedLabel" type="Label" parent="Hud" unique_id=502232410 node_paths=PackedStringArray("square")]
-offset_left = 16.0
-offset_top = 16.0
-offset_right = 68.0
-offset_bottom = 39.0
-text = "Speed:"
+[node name="LaneBand" type="ColorRect" parent="." unique_id=979664798 node_paths=PackedStringArray("hero")]
+mouse_filter = 2
+color = Color(0.16470589, 0.16470589, 0.2, 1)
 script = ExtResource("1_0xm2m")
-square = NodePath("../../DriftingSquare")
+hero = NodePath("../World/Hero")
 
-[node name="FpsLabel" type="Label" parent="Hud" unique_id=599506407]
+[node name="World" type="Node2D" parent="." unique_id=1779306900]
+y_sort_enabled = true
+
+[node name="Pillar1" type="Polygon2D" parent="World" unique_id=1806583789]
+position = Vector2(280, 470)
+color = Color(0.41960785, 0.43529412, 0.5019608, 1)
+polygon = PackedVector2Array(-32, -260, 32, -260, 32, 0, -32, 0)
+
+[node name="Pillar2" type="Polygon2D" parent="World" unique_id=1403227181]
+position = Vector2(640, 560)
+color = Color(0.41960785, 0.43529412, 0.5019608, 1)
+polygon = PackedVector2Array(-32, -260, 32, -260, 32, 0, -32, 0)
+
+[node name="Pillar3" type="Polygon2D" parent="World" unique_id=478682145]
+position = Vector2(1000, 660)
+color = Color(0.41960785, 0.43529412, 0.5019608, 1)
+polygon = PackedVector2Array(-32, -260, 32, -260, 32, 0, -32, 0)
+
+[node name="Hero" type="Hero" parent="World" unique_id=937234605]
+position = Vector2(460, 600)
+
+[node name="Body" type="Polygon2D" parent="World/Hero" unique_id=966950019]
+color = Color(0.9098039, 0.4745098, 0.16862746, 1)
+polygon = PackedVector2Array(-24, -96, 24, -96, 24, 0, -24, 0)
+
+[node name="Hud" type="CanvasLayer" parent="." unique_id=1613323869]
+
+[node name="FpsLabel" type="Label" parent="Hud" unique_id=124840403]
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
