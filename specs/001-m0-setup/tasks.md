@@ -131,7 +131,7 @@ scenarios 1–3).
   - child `CanvasLayer` named `Hud`, holding a `Label` named `SpeedLabel` (top-left preset with a 16 px margin, script `res://ui/speed_label.gd`, `square` set to the `DriftingSquare` node) and a `Label` named `FpsLabel` (top-right preset with a 16 px margin, script `res://ui/fps_label.gd`).
 
   Confirm the main scene is `res://main.tscn` in Project Settings (depends on T017–T019)
-- [ ] T021 [US1] (owner) Press Play and run quickstart.md scenarios 1, 2 and 3: window, square, wrap, label "Speed: 160 px/s", FPS counter; no errors in the Output panel at startup or after 60 s. Fix anything that fails in `rust/src/drifting_square.rs` or `godot/ui/*.gd` before going on (depends on T020)
+- [X] T021 [US1] (owner) Press Play and run quickstart.md scenarios 1, 2 and 3: window, square, wrap, label "Speed: 160 px/s", FPS counter; no errors in the Output panel at startup or after 60 s. Fix anything that fails in `rust/src/drifting_square.rs` or `godot/ui/*.gd` before going on (depends on T020)
 
 **Checkpoint**: M0 is playable. This is the MVP: Rust and GDScript work together in Godot.
 
@@ -174,9 +174,9 @@ caches.
 
 **Independent Test**: Quickstart scenarios 10, 11 and 12.
 
-- [ ] T028 [US4] In `rust/`, run `cargo fmt --check`, `cargo build`, `cargo clippy --all-targets` and `cargo test`. Fix every warning in `rust/src/*.rs` until all four pass with 0 warnings (SC-005). Do not silence lints with `#[allow]` unless the reason is written next to it
+- [X] T028 [US4] In `rust/`, run `cargo fmt --check`, `cargo build`, `cargo clippy --all-targets` and `cargo test`. Fix every warning in `rust/src/*.rs` until all four pass with 0 warnings (SC-005). Do not silence lints with `#[allow]` unless the reason is written next to it
 - [ ] T029 [US4] (owner) In the Godot editor, open `godot/ui/speed_label.gd` and `godot/ui/fps_label.gd` and confirm the Output and Script panels show 0 GDScript errors or warnings, with `untyped_declaration` set to Error (quickstart scenario 11)
-- [ ] T030 [US4] After a build and a Play, run `git status`. Confirm `rust/target/` and `godot/.godot/` do not appear, and that `rust/Cargo.lock`, `godot/project.godot`, `godot/beastrider.gdextension`, `godot/main.tscn`, `godot/data/tuning.json`, `godot/ui/*.gd` and their `*.uid` files are all present to be committed (quickstart scenario 12, FR-012, research.md R12)
+- [X] T030 [US4] After a build and a Play, run `git status`. Confirm `rust/target/` and `godot/.godot/` do not appear, and that `rust/Cargo.lock`, `godot/project.godot`, `godot/beastrider.gdextension`, `godot/main.tscn`, `godot/data/tuning.json`, `godot/ui/*.gd` and their `*.uid` files are all present to be committed (quickstart scenario 12, FR-012, research.md R12)
 
 **Checkpoint**: The Quality Gate is green.
 
@@ -186,9 +186,9 @@ caches.
 
 **Purpose**: Constitution compliance review and the milestone commit.
 
-- [ ] T031 [P] Review docs: `///` on every public item in `rust/src/lib.rs`, `rust/src/tuning.rs` and `rust/src/drifting_square.rs` (comments say why, not what); the `// SAFETY:` comment is present on the `ExtensionLibrary` impl; `##` class doc comments are on both scripts in `godot/ui/`
-- [ ] T032 [P] Check for magic numbers (FR-008): `grep -rnE '\b160\b|\b320\b' rust/src godot/ui` returns nothing. The speed exists only in `godot/data/tuning.json`
-- [ ] T033 Run the Constitution compliance review required by Governance: check the finished work against Principles I–VIII and the Code Style section, using the table in `specs/001-m0-setup/plan.md` as the checklist. Any departure goes into the Complexity Tracking section of that file
+- [X] T031 [P] Review docs: `///` on every public item in `rust/src/lib.rs`, `rust/src/tuning.rs` and `rust/src/drifting_square.rs` (comments say why, not what); the `// SAFETY:` comment is present on the `ExtensionLibrary` impl; `##` class doc comments are on both scripts in `godot/ui/`
+- [X] T032 [P] Check for magic numbers (FR-008): `grep -rnE '\b160\b|\b320\b' rust/src godot/ui` returns nothing. The speed exists only in `godot/data/tuning.json`
+- [X] T033 Run the Constitution compliance review required by Governance: check the finished work against Principles I–VIII and the Code Style section, using the table in `specs/001-m0-setup/plan.md` as the checklist. Any departure goes into the Complexity Tracking section of that file
 - [ ] T034 (owner) Run the full quickstart.md, scenarios 1–12, in one sitting on the target machine. Every scenario must pass (the milestone is done when the Quality Gate passes)
 - [ ] T035 Commit the M0 implementation on branch `feat/m0-setup` in small logical commits (for example: Rust crate and entry point; tuning module and tests; DriftingSquare; Godot project, scene and scripts), staging by explicit path and reviewing `git diff --staged` before each commit, as the owner's git rules require. Ask the owner before committing. Then `git status` must be clean (depends on T028–T034)
 
