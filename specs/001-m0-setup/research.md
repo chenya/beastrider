@@ -9,23 +9,33 @@ looked up are marked with where they came from.
 
 ## R1. Godot version
 
-- **Decision**: Godot **4.6.3-stable**, standard (non-.NET) build, `linux.x86_64`, official binary
-  from the Godot GitHub releases page (`Godot_v4.6.3-stable_linux.x86_64.zip`), checked against the
-  release's `SHA512-SUMS.txt`.
-- **Rationale**: The owner asked for the latest 4.6.x maintenance release. 4.6.3-stable (released
-  2026-05-20) is the newest 4.6 patch on the releases page; no 4.6.4 exists. Maintenance releases
-  are compatible with earlier 4.6 releases.
+- **Decision**: Godot **4.7.2-stable**, standard (non-.NET) build, `linux.x86_64`. This is the
+  official binary already installed on the target machine as `~/.local/bin/godot`
+  (`godot --version` → `4.7.2.stable.official.ed1daf0bf`). The game is built against the **4.6
+  API** (R2), which is older than the engine. That is allowed.
+- **Rationale**: The owner's choice (2026-11-19). The plan first pinned 4.6.3, the latest 4.6
+  patch. When it turned out that 4.7.2 was already installed, the owner chose to run on 4.7.2 and
+  keep the 4.6 API level. This means:
+  - no second Godot install, and the plain `godot` command is the right one;
+  - the constitution rule "the gdext API level MUST NOT be newer than the Godot version that runs
+    the game" holds (4.6 ≤ 4.7.2);
+  - the extension stays loadable by any Godot from 4.6 up, since `compatibility_minimum = 4.6`
+    (R7).
+
+  The cost is that 4.7-only engine APIs cannot be called from Rust until the API level is raised.
 - **Alternatives considered**:
-  - *Godot 4.7.2-stable* (latest overall, 2026-08-18). gdext 0.5.5 supports it (`api-4-7`). Not
-    chosen because the owner picked 4.6. Moving to 4.7 later is a plan change: bump the engine and
-    the `api-*` feature together.
+  - *Godot 4.6.3-stable* (latest 4.6 patch, 2026-05-20). This was the original pin. Rejected:
+    it would mean a second binary next to the installed 4.7.2, and an easy way to open the project
+    with the wrong one.
+  - *4.7.2 with `api-4-7`*. Matches the engine exactly. Not chosen by the owner. Raising the API
+    level later is a one-line `Cargo.toml` change plus a rebuild, and it is needed only when a 4.7
+    API is wanted.
   - *Ubuntu snap / Flathub packages*. Rejected: the version can change under you, and sandboxing
     can get in the way of loading a library from `../rust/target/`.
-- **Install note**: The binary is not part of the repository. The quickstart puts it in
-  `~/.local/bin/` as `godot-4.6.3`.
+- **Install note**: The binary is not part of the repository. If `~/.local/bin/godot` is ever
+  replaced with a different version, update this entry and re-run the quickstart.
 - **Sources**: [GitHub releases](https://github.com/godotengine/godot/releases),
-  [Maintenance release: Godot 4.6.3](https://godotengine.org/article/maintenance-release-godot-4-6-3/),
-  [4.6.3 download archive](https://godotengine.org/download/archive/4.6.3-stable/).
+  [Maintenance release: Godot 4.6.3](https://godotengine.org/article/maintenance-release-godot-4-6-3/).
 
 ## R2. gdext version and API level
 
@@ -36,9 +46,11 @@ looked up are marked with where they came from.
   - **The API level is set explicitly.** In 0.5.5, the default when no `api-*` feature is given is
     4.6 (`godot-bindings-0.5.5/src/import.rs` uses `version_4_6` as the default), which matches
     what the owner expected. But the same release already supports 4.7 (`LATEST_API_VERSION =
-    (4, 7, 0)`), so a future 0.5.x could move the default to 4.7. That would silently break the
-    constitution rule "the gdext API level MUST NOT be newer than the Godot version". Writing
-    `api-4-6` makes the rule hold no matter what the default becomes.
+    (4, 7, 0)`), so a future 0.5.x could move the default to 4.7 or later. Writing `api-4-6`
+    keeps the owner's chosen API level fixed no matter what the default becomes. It also keeps
+    the constitution rule ("the gdext API level MUST NOT be newer than the Godot version that
+    runs the game") true by construction: the engine is 4.7.2 (R1), and a default moving past it,
+    for example to 4.8, would otherwise break the rule silently.
   - Licence: MPL-2.0 (from `cargo info`). gdext is the constitution's one approved dependency.
 - **Alternatives considered**: relying on the default (rejected for the reason above);
   `api-custom` (needs a Godot binary at build time, which adds a step for no gain).
@@ -91,8 +103,8 @@ looked up are marked with where they came from.
 ## R5. Wayland vs X11 on Ubuntu 24.04
 
 - **Decision**: **No setting is needed.** Leave the project's Linux display driver at its default
-  (X11). On Ubuntu 24.04's default GNOME Wayland session, Godot 4.6 then runs through XWayland.
-- **Rationale**: The Godot 4.6 docs say X11 is still the default display driver for projects,
+  (X11). On Ubuntu 24.04's default GNOME Wayland session, Godot 4.7 then runs through XWayland.
+- **Rationale**: The Godot 4.6 and 4.7 docs both say X11 is still the default display driver for projects,
   because Wayland support is still a work in progress. A project set to Wayland falls back to X11
   automatically when Wayland is not available. The target machine's session is Wayland
   (`XDG_SESSION_TYPE=wayland`), which XWayland handles.
@@ -101,7 +113,7 @@ looked up are marked with where they came from.
   the problem is XWayland or something else. `--display-server x11` / `wayland` on the command
   line can switch drivers for a single run without changing the project.
 - **Alternatives considered**: forcing native Wayland in project settings (rejected: still marked
-  as in progress in 4.6, and it buys nothing for M0).
+  as in progress in 4.6 and 4.7, and it buys nothing for M0).
 - **Sources**: [Godot 4.6 docs: Wayland and X11](https://docs.godotengine.org/en/4.6/tutorials/platform/linux/wayland_x11.html),
   [Godot 4.7 docs: Wayland and X11](https://docs.godotengine.org/en/4.7/tutorials/platform/linux/wayland_x11.html).
 
@@ -121,7 +133,8 @@ looked up are marked with where they came from.
 ## R7. How the Godot project finds the Rust library
 
 - **Decision**: `godot/beastrider.gdextension` with:
-  - `entry_symbol = "gdext_rust_init"`, `compatibility_minimum = 4.6`, `reloadable = true`;
+  - `entry_symbol = "gdext_rust_init"`, `compatibility_minimum = 4.6` (matches the API level, so
+    the library loads in Godot 4.6 and newer, including the installed 4.7.2), `reloadable = true`;
   - `linux.debug.x86_64 = "res://../rust/target/debug/libbeastrider.so"`;
   - `linux.release.x86_64 = "res://../rust/target/release/libbeastrider.so"`.
 - **Rationale**: This is the godot-rust book's standard setup for a `godot/` + `rust/` layout. The

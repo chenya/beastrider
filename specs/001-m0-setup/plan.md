@@ -9,8 +9,10 @@
 Prove the fixed stack works end to end on the target machine before any gameplay exists. This
 milestone sets up:
 
-- a Godot 4.6.3 project in `godot/` (Compatibility renderer, 1280×720, V-Sync on);
-- a Rust `cdylib` crate in `rust/` using gdext 0.5.5, pinned to API level 4.6.
+- a Godot project in `godot/`, run on the installed Godot 4.7.2 (Compatibility renderer,
+  1280×720, V-Sync on);
+- a Rust `cdylib` crate in `rust/` using gdext 0.5.5, pinned to API level 4.6. That is older than
+  the engine, which is allowed, so the library loads in any Godot from 4.6 up.
 
 The Rust class `DriftingSquare` loads its speed from `godot/data/tuning.json`, moves and wraps
 itself, and exposes `speed()`. Two GDScript labels show that speed and the FPS, holding no state of
@@ -21,9 +23,10 @@ milestone ends with the Quality Gate passing and a clean `git status`.
 ## Technical Context
 
 **Language/Version**: Rust 1.100.0 (pinned in `rust/rust-toolchain.toml`; gdext 0.5.5 needs at
-least 1.94) for rules and state; GDScript (Godot 4.6.3) for presentation and glue.
+least 1.94) for rules and state; GDScript (Godot 4.7.2) for presentation and glue.
 
-**Primary Dependencies**: Godot **4.6.3-stable**, standard build, linux.x86_64; godot-rust gdext,
+**Primary Dependencies**: Godot **4.7.2-stable**, standard build, linux.x86_64, installed as
+`godot` ([research.md R1](research.md)); godot-rust gdext,
 crate `godot` **=0.5.5** with feature `api-4-6` (MPL-2.0). No other crates or addons.
 
 **Storage**: One JSON tuning file, `godot/data/tuning.json`, read once per run. No save data.
@@ -62,7 +65,7 @@ Constitution v1.3.1. ✅ = passes, ➖ = does not apply to M0.
 | **VI. Original Art, Cheap Animation** | ✅ | ✅ | Placeholder only: one `ColorRect` and default-font labels. No outside assets, so the assets log is not needed yet (it is created with the first non-placeholder asset). |
 | **VII. Co-op Ready, Local Only** | ✅ | ✅ | No player, no input, no camera in M0, so nothing assumes "the player". No networking. |
 | **VIII. Always Debuggable** | ✅ | ✅ | The debug overlay is due at M2 and the restart key at M3, so neither is needed yet. Under git from the first session; M0 ends with a commit. |
-| **Tech: engine and API level** | ✅ | ✅ | Godot 4.6.3 is pinned, and gdext is pinned at API level 4.6 (`api-4-6` set explicitly, so it can never be newer than the engine). |
+| **Tech: engine and API level** | ✅ | ✅ | Engine: Godot 4.7.2. gdext is pinned at API level 4.6 (`api-4-6` set explicitly). 4.6 ≤ 4.7.2, so the API is not newer than the engine, and an explicit feature means a new default cannot change that. |
 | **Tech: Rust/GDScript split** | ✅ | ✅ | Rust owns position, speed, wrapping, and tuning loading and checks. GDScript only reads `speed()` and the FPS. Scene and layout are built in the editor. |
 | **Tech: toolchain ≥ gdext minimum** | ✅ | ✅ | 1.100.0 ≥ 1.94, pinned in `rust/rust-toolchain.toml`. |
 | **Tech: types over strings** | ✅ | ✅ | No modes in M0. Tuning errors use a Rust error enum, not strings that callers have to compare. |
@@ -109,7 +112,7 @@ rust/                          # Rust GDExtension crate "beastrider" (cdylib)
     ├── drifting_square.rs     # DriftingSquare class; wrap_x + its unit tests
     └── tuning.rs              # read + check tuning.json; SquareTuning, TuningError; unit tests
 
-godot/                         # Godot 4.6.3 project
+godot/                         # Godot project (engine 4.7.2, extension API 4.6)
 ├── project.godot              # Compatibility renderer, 1280×720, V-Sync, dark clear colour,
 │                              #   untyped_declaration = Error, main scene
 ├── beastrider.gdextension     # points to ../rust/target/{debug,release}/libbeastrider.so
@@ -142,5 +145,6 @@ Alternative Rejected Because*.
   list it. Adding it is a constitution amendment (MINOR) if the owner wants it.
 - **serde/serde_json**: revisit when checking Dictionary fields by hand gets repetitive (likely
   M4 or M6). See research R4.
-- **Godot 4.7**: 4.7.2 is out, and gdext 0.5.5 supports it. Upgrading means changing the engine
-  and the `api-*` feature in the same change.
+- **API level 4.7**: the engine is already 4.7.2, but Rust targets the 4.6 API (the owner's
+  choice, research R1). Switch `api-4-6` to `api-4-7` (and `compatibility_minimum` to 4.7) only
+  when a milestone needs a 4.7-only engine API, and record the change in that milestone's plan.

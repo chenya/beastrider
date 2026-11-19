@@ -44,14 +44,14 @@ Each session ends with something that builds, and from Session 2 on, something y
 **Purpose**: Toolchain installed, both folders exist, and Godot loads an (empty) Rust library.
 
 - [ ] T001 Create the root `.gitignore` containing exactly the two rules `rust/target/` and `godot/.godot/` (one per line, with a short comment above each) in `.gitignore`
-- [ ] T002 [P] (owner) Install Godot 4.6.3-stable (standard build, linux.x86_64) to `~/.local/bin/godot-4.6.3`, following quickstart.md "Prerequisites" step 2: download `Godot_v4.6.3-stable_linux.x86_64.zip` and `SHA512-SUMS.txt` from the 4.6.3-stable GitHub release, check with `sha512sum --check --ignore-missing`, then confirm `godot-4.6.3 --version` prints `4.6.3.stable.official` (outside the repo, nothing to commit)
+- [ ] T002 [P] Confirm the installed engine: `godot --version` (resolving to `~/.local/bin/godot`) prints `4.7.2.stable.official.ed1daf0bf` (quickstart.md "Prerequisites" step 2, research.md R1). If it prints anything else, stop and update research.md R1 first (outside the repo, nothing to commit)
 - [ ] T003 [P] Create `rust/Cargo.toml`: `[package] name = "beastrider"`, `edition = "2024"`, `rust-version = "1.94"`, `publish = false`; `[lib] crate-type = ["cdylib"]`; `[dependencies] godot = { version = "=0.5.5", features = ["api-4-6"] }` (exact pin and explicit API level per research.md R2; no other dependencies)
 - [ ] T004 [P] Create `rust/rust-toolchain.toml` with `[toolchain] channel = "1.100.0"` and `components = ["rustfmt", "clippy"]` (research.md R3)
 - [ ] T005 [P] Create `rust/rustfmt.toml` containing `max_width = 100` (constitution, Code Style: Rust)
 - [ ] T006 Create `rust/src/lib.rs` with the extension entry point: a `///`-documented unit struct `BeastriderExtension` and `#[gdextension] unsafe impl ExtensionLibrary for BeastriderExtension {}` preceded by a `// SAFETY:` comment explaining that gdext requires this `unsafe impl` as the library's entry point and that it adds no unsafe code of its own (the only `unsafe` allowed in game code). Then run `cargo build` in `rust/` and confirm it creates `rust/target/debug/libbeastrider.so` and `rust/Cargo.lock` (depends on T003–T005)
-- [ ] T007 [P] Create `godot/project.godot` (`config_version=5`) with: `application/config/name="Beastrider"`, `application/config/features=PackedStringArray("4.6")`, `application/run/main_scene="res://main.tscn"`, `display/window/size/viewport_width=1280`, `display/window/size/viewport_height=720`, `display/window/vsync/vsync_mode=1` (Enabled, written out explicitly), `rendering/renderer/rendering_method="gl_compatibility"`, `rendering/renderer/rendering_method.mobile="gl_compatibility"`, `rendering/environment/defaults/default_clear_color=Color(0.05, 0.05, 0.07, 1)` (dark background), and `debug/gdscript/warnings/untyped_declaration=2` (Error). Leave the Linux display driver at its default (X11, research.md R5)
+- [ ] T007 [P] Create `godot/project.godot` (`config_version=5`) with: `application/config/name="Beastrider"`, `application/config/features=PackedStringArray("4.7")` (the engine version the project is saved with; the Rust API level is separate and stays 4.6), `application/run/main_scene="res://main.tscn"`, `display/window/size/viewport_width=1280`, `display/window/size/viewport_height=720`, `display/window/vsync/vsync_mode=1` (Enabled, written out explicitly), `rendering/renderer/rendering_method="gl_compatibility"`, `rendering/renderer/rendering_method.mobile="gl_compatibility"`, `rendering/environment/defaults/default_clear_color=Color(0.05, 0.05, 0.07, 1)` (dark background), and `debug/gdscript/warnings/untyped_declaration=2` (Error). Leave the Linux display driver at its default (X11, research.md R5)
 - [ ] T008 [P] Create `godot/beastrider.gdextension`: `[configuration]` with `entry_symbol = "gdext_rust_init"`, `compatibility_minimum = 4.6`, `reloadable = true`; `[libraries]` with `linux.debug.x86_64 = "res://../rust/target/debug/libbeastrider.so"` and `linux.release.x86_64 = "res://../rust/target/release/libbeastrider.so"` (research.md R7)
-- [ ] T009 Import the project once headless with `godot-4.6.3 --headless --path godot --editor --quit` and confirm the output has no errors about `beastrider.gdextension` or loading `libbeastrider.so` (FR-011). It is expected to warn that `res://main.tscn` does not exist yet. Confirm `git status` does not show `godot/.godot/` or `rust/target/` (depends on T001, T002, T006–T008)
+- [ ] T009 Import the project once headless with `godot --headless --path godot --editor --quit` and confirm the output has no errors about `beastrider.gdextension` or loading `libbeastrider.so` (FR-011). It is expected to warn that `res://main.tscn` does not exist yet. Confirm `git status` does not show `godot/.godot/` or `rust/target/` (depends on T001, T002, T006–T008)
 
 **Checkpoint**: Godot loads the Rust library without errors. Nothing is on screen yet.
 
@@ -116,7 +116,7 @@ scenarios 1–3).
   - Docs: `///` on the struct and on `speed()`. No literal speed value anywhere (FR-008).
 
   (depends on T014, T015)
-- [ ] T017 [US1] Add `mod drifting_square;` to `rust/src/lib.rs`, run `cargo build` in `rust/`, then open the editor (`godot-4.6.3 --editor --path godot`) and confirm `DriftingSquare` appears in the Create New Node dialog under `Node2D` (depends on T016)
+- [ ] T017 [US1] Add `mod drifting_square;` to `rust/src/lib.rs`, run `cargo build` in `rust/`, then open the editor (`godot --editor --path godot`) and confirm `DriftingSquare` appears in the Create New Node dialog under `Node2D` (depends on T016)
 - [ ] T018 [P] [US1] Create `godot/ui/speed_label.gd`:
   - `extends Label`, then a `##` class doc comment.
   - One typed export, `@export var square: DriftingSquare`, with a `##` doc.
@@ -262,10 +262,10 @@ Task: "Create godot/ui/fps_label.gd (reads Engine.get_frames_per_second())"
 ### Incremental Delivery
 
 1. Setup + Foundational → builds, loads, tests pass (end of session 1)
-2. + US1 → playable (end of session 2) → MVP
-3. + US2 → 60 fps proven on the UHD 620
-4. + US3 → data-driven tuning proven, error paths checked
-5. + US4 + Polish → Quality Gate green, committed (end of session 3) → M0 done
+2. Add US1 → playable (end of session 2) → MVP
+3. Add US2 → 60 fps proven on the UHD 620
+4. Add US3 → data-driven tuning proven, error paths checked
+5. Add US4 + Polish → Quality Gate green, committed (end of session 3) → M0 done
 
 ### If a Session Stalls
 

@@ -8,14 +8,14 @@ Run it on the target machine (Ubuntu 24.04 LTS, Intel UHD 620). Versions come fr
 
 1. **Rust**: `rustup` installed. The toolchain pinned in `rust/rust-toolchain.toml` (1.100.0,
    with rustfmt and clippy) is installed automatically the first time `cargo` runs inside `rust/`.
-2. **Godot 4.6.3-stable**: download `Godot_v4.6.3-stable_linux.x86_64.zip` and `SHA512-SUMS.txt`
-   from the 4.6.3-stable GitHub release, then:
+2. **Godot 4.7.2-stable**: already installed as `~/.local/bin/godot`. Check it with:
+
    ```sh
-   sha512sum --check --ignore-missing SHA512-SUMS.txt
-   unzip Godot_v4.6.3-stable_linux.x86_64.zip
-   install -m 755 Godot_v4.6.3-stable_linux.x86_64 ~/.local/bin/godot-4.6.3
-   godot-4.6.3 --version    # expect: 4.6.3.stable.official.<hash>
+   godot --version    # expect: 4.7.2.stable.official.ed1daf0bf
    ```
+
+   The Rust library targets the 4.6 API, so it also loads in any Godot from 4.6 up
+   ([research.md R1–R2](research.md)). If the installed version changes, update research.md R1.
 3. **Session**: the default Ubuntu (Wayland) session is fine; Godot runs through XWayland
    ([research.md R5](research.md)).
 
@@ -23,7 +23,7 @@ Run it on the target machine (Ubuntu 24.04 LTS, Intel UHD 620). Versions come fr
 
 ```sh
 cd rust && cargo build && cd ..                 # creates rust/target/debug/libbeastrider.so
-godot-4.6.3 --editor --path godot               # opens the project in the editor
+godot --editor --path godot                     # opens the project in the editor
 ```
 
 In the editor, press **Play** (F5).
