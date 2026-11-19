@@ -43,7 +43,7 @@ not code. Neither Rust nor GDScript code may contain magic numbers for these val
 
 ### V. Runs Well on Weak Hardware
 
-The game MUST hold 60 fps at 1280x720 on an Intel UHD 620 integrated GPU using Godot's
+The game MUST hold 60 fps at 1280x720 on an Intel UHD 630 integrated GPU using Godot's
 Compatibility renderer (OpenGL). Plans MUST NOT depend on features that exist only in the Forward+
 or Mobile renderers. Heavy shaders, many dynamic lights and unbounded particle effects are
 avoided. The mood comes from palette, silhouette, a simple vignette and a few lights that each
@@ -83,7 +83,7 @@ with a commit at the end of every passing milestone.
   menus, debug overlay, hit-feel effects (flash, shake, particles), and wiring scenes together.
   GDScript MUST NOT hold game state; it reads from Rust objects and reacts to their signals.
   Scenes, nodes and animation are built in the Godot editor.
-- Platform: Ubuntu 24.04 LTS desktop, single machine, offline. Target hardware: Intel UHD 620
+- Platform: Ubuntu 24.04 LTS desktop, single machine, offline. Target hardware: Intel UHD 630
   integrated GPU with the stock Mesa driver. 60 fps is measured with V-Sync on, on that machine.
 - Rendering: Compatibility renderer.
 - Data format: one format for all tuning data (JSON or Godot Resources), chosen in the M0 plan
@@ -214,5 +214,7 @@ maker.
   - 1.3.1 (2026-11-19): GDScript style rules checked against the guide's source file; code order
     corrected (annotations before `class_name`, public before private within each group), and
     layout, quote, operator, typing and comment rules added.
+  - 1.3.2 (2026-11-19): target GPU corrected from Intel UHD 620 to Intel UHD 630, the GPU in
+    the owner's machine, as reported by Godot at startup.
 
-**Version**: 1.3.1 | **Ratified**: 2026-11-19 | **Last Amended**: 2026-11-19
+**Version**: 1.3.2 | **Ratified**: 2026-11-19 | **Last Amended**: 2026-11-19

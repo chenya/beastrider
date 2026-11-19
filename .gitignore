@@ -1,0 +1,41 @@
+# Beastrider .gitignore
+# Repository layout: godot/ (Godot 4 project), rust/ (gdext cdylib crate), .specify/ (Spec Kit).
+
+# --- Rust ---
+# Build output. Cargo.lock is committed on purpose: this crate is a final
+# product, not a library, so builds must be reproducible.
+rust/target/
+# rustfmt backup files
+**/*.rs.bk
+
+# --- Godot 4 ---
+# Editor cache and imported-asset cache; regenerated on open.
+godot/.godot/
+# Compiled Rust libraries copied into the project, if the .gdextension file
+# points here instead of at rust/target/. Rebuilt by cargo, never hand-edited.
+godot/bin/
+# Exported game builds and export credentials.
+godot/export/
+build/
+export_credentials.cfg
+# Note: *.import files ARE committed in Godot 4; they hold import settings.
+
+# --- Spec Kit ---
+# .specify/ and specs/ are committed: they are the project's design record.
+
+# --- Coding agent local settings (may contain personal paths or tokens) ---
+.claude/settings.local.json
+.env
+.env.*
+
+# --- Editors ---
+.vscode/
+.idea/
+*.swp
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+.directory
+.Trash-*/
