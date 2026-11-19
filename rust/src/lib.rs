@@ -1,5 +1,7 @@
 //! Beastrider's game rules and state, exposed to Godot as a GDExtension library.
 
+mod tuning;
+
 use godot::prelude::*;
 
 /// Entry point that registers this library's classes with Godot.
