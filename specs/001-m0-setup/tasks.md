@@ -190,7 +190,7 @@ caches.
 - [X] T032 [P] Check for magic numbers (FR-008): `grep -rnE '\b160\b|\b320\b' rust/src godot/ui` returns nothing. The speed exists only in `godot/data/tuning.json`
 - [X] T033 Run the Constitution compliance review required by Governance: check the finished work against Principles I–VIII and the Code Style section, using the table in `specs/001-m0-setup/plan.md` as the checklist. Any departure goes into the Complexity Tracking section of that file
 - [X] T034 (owner) Run the full quickstart.md, scenarios 1–12, in one sitting on the target machine. Every scenario must pass (the milestone is done when the Quality Gate passes)
-- [ ] T035 Commit the M0 implementation on branch `feat/m0-setup` in small logical commits (for example: Rust crate and entry point; tuning module and tests; DriftingSquare; Godot project, scene and scripts), staging by explicit path and reviewing `git diff --staged` before each commit, as the owner's git rules require. Ask the owner before committing. Then `git status` must be clean (depends on T028–T034)
+- [X] T035 Commit the M0 implementation on branch `feat/m0-setup` in small logical commits (for example: Rust crate and entry point; tuning module and tests; DriftingSquare; Godot project, scene and scripts), staging by explicit path and reviewing `git diff --staged` before each commit, as the owner's git rules require. Ask the owner before committing. Then `git status` must be clean (depends on T028–T034)
 
 ---
 
