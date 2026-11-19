@@ -144,8 +144,8 @@ scenarios 1–3).
 **Independent Test**: Quickstart scenario 4 (watch the FPS counter for 60 s), backed by scenarios
 3 and 9.
 
-- [ ] T022 [US2] (owner) Check the renderer and GPU: the Output panel startup lines show the OpenGL Compatibility renderer on the Intel/Mesa device (not `llvmpipe`); Project Settings show `rendering_method = gl_compatibility` and V-Sync Enabled (quickstart scenarios 3 and 9; values set in `godot/project.godot` by T007)
-- [ ] T023 [US2] (owner) Watch the FPS counter for 60 s by the clock (quickstart scenario 4). It must show 60 throughout, except the first second. If it fails, follow quickstart "If something goes wrong" (retry under "Ubuntu on Xorg"), and record the finding and its fix under R5 or R6 in `specs/001-m0-setup/research.md` (depends on T021, T022)
+- [X] T022 [US2] (owner) Check the renderer and GPU: the Output panel startup lines show the OpenGL Compatibility renderer on the Intel/Mesa device (not `llvmpipe`); Project Settings show `rendering_method = gl_compatibility` and V-Sync Enabled (quickstart scenarios 3 and 9; values set in `godot/project.godot` by T007)
+- [X] T023 [US2] (owner) Watch the FPS counter for 60 s by the clock (quickstart scenario 4). It must show 60 throughout, except the first second. If it fails, follow quickstart "If something goes wrong" (retry under "Ubuntu on Xorg"), and record the finding and its fix under R5 or R6 in `specs/001-m0-setup/research.md` (depends on T021, T022)
 
 **Checkpoint**: Principle V is proven on the real hardware.
 
@@ -158,10 +158,10 @@ data gives clear errors with no crash and no hidden fallback.
 
 **Independent Test**: Quickstart scenarios 5, 6 and 7.
 
-- [ ] T024 [US3] (owner) Quickstart scenario 5: time one crossing at speed 160, set `speed` to `320` in `godot/data/tuning.json`, do **not** run cargo, press Play. The label shows 320, and the crossing takes about half the time (±10 %, SC-003)
-- [ ] T025 [US3] (owner) Quickstart scenario 6: set `speed` to `0` in `godot/data/tuning.json`. The square stays still and the label shows 0
-- [ ] T026 [US3] (owner) Quickstart scenario 7. In `godot/data/tuning.json`, try each of: `-5`; `"fast"`; the `speed` key removed; the `drifting_square` section removed; a broken JSON comma; the file renamed. Each time, expect exactly one error starting `DriftingSquare:` that names the file, the field path (or line, for broken JSON) and the problem; the square stays still; no crash. If a message is unclear, fix its `Display` text in `rust/src/tuning.rs` and re-run `cargo test`
-- [ ] T027 [US3] Restore `godot/data/tuning.json` to `speed` `160`, and confirm `git diff godot/data/tuning.json` is empty (depends on T024–T026)
+- [X] T024 [US3] (owner) Quickstart scenario 5: time one crossing at speed 160, set `speed` to `320` in `godot/data/tuning.json`, do **not** run cargo, press Play. The label shows 320, and the crossing takes about half the time (±10 %, SC-003)
+- [X] T025 [US3] (owner) Quickstart scenario 6: set `speed` to `0` in `godot/data/tuning.json`. The square stays still and the label shows 0
+- [X] T026 [US3] (owner) Quickstart scenario 7. In `godot/data/tuning.json`, try each of: `-5`; `"fast"`; the `speed` key removed; the `drifting_square` section removed; a broken JSON comma; the file renamed. Each time, expect exactly one error starting `DriftingSquare:` that names the file, the field path (or line, for broken JSON) and the problem; the square stays still; no crash. If a message is unclear, fix its `Display` text in `rust/src/tuning.rs` and re-run `cargo test`
+- [X] T027 [US3] Restore `godot/data/tuning.json` to `speed` `160`, and confirm `git diff godot/data/tuning.json` is empty (depends on T024–T026)
 
 **Checkpoint**: Principle IV is proven end to end.
 
@@ -175,7 +175,7 @@ caches.
 **Independent Test**: Quickstart scenarios 10, 11 and 12.
 
 - [X] T028 [US4] In `rust/`, run `cargo fmt --check`, `cargo build`, `cargo clippy --all-targets` and `cargo test`. Fix every warning in `rust/src/*.rs` until all four pass with 0 warnings (SC-005). Do not silence lints with `#[allow]` unless the reason is written next to it
-- [ ] T029 [US4] (owner) In the Godot editor, open `godot/ui/speed_label.gd` and `godot/ui/fps_label.gd` and confirm the Output and Script panels show 0 GDScript errors or warnings, with `untyped_declaration` set to Error (quickstart scenario 11)
+- [X] T029 [US4] (owner) In the Godot editor, open `godot/ui/speed_label.gd` and `godot/ui/fps_label.gd` and confirm the Output and Script panels show 0 GDScript errors or warnings, with `untyped_declaration` set to Error (quickstart scenario 11)
 - [X] T030 [US4] After a build and a Play, run `git status`. Confirm `rust/target/` and `godot/.godot/` do not appear, and that `rust/Cargo.lock`, `godot/project.godot`, `godot/beastrider.gdextension`, `godot/main.tscn`, `godot/data/tuning.json`, `godot/ui/*.gd` and their `*.uid` files are all present to be committed (quickstart scenario 12, FR-012, research.md R12)
 
 **Checkpoint**: The Quality Gate is green.
@@ -189,7 +189,7 @@ caches.
 - [X] T031 [P] Review docs: `///` on every public item in `rust/src/lib.rs`, `rust/src/tuning.rs` and `rust/src/drifting_square.rs` (comments say why, not what); the `// SAFETY:` comment is present on the `ExtensionLibrary` impl; `##` class doc comments are on both scripts in `godot/ui/`
 - [X] T032 [P] Check for magic numbers (FR-008): `grep -rnE '\b160\b|\b320\b' rust/src godot/ui` returns nothing. The speed exists only in `godot/data/tuning.json`
 - [X] T033 Run the Constitution compliance review required by Governance: check the finished work against Principles I–VIII and the Code Style section, using the table in `specs/001-m0-setup/plan.md` as the checklist. Any departure goes into the Complexity Tracking section of that file
-- [ ] T034 (owner) Run the full quickstart.md, scenarios 1–12, in one sitting on the target machine. Every scenario must pass (the milestone is done when the Quality Gate passes)
+- [X] T034 (owner) Run the full quickstart.md, scenarios 1–12, in one sitting on the target machine. Every scenario must pass (the milestone is done when the Quality Gate passes)
 - [ ] T035 Commit the M0 implementation on branch `feat/m0-setup` in small logical commits (for example: Rust crate and entry point; tuning module and tests; DriftingSquare; Godot project, scene and scripts), staging by explicit path and reviewing `git diff --staged` before each commit, as the owner's git rules require. Ask the owner before committing. Then `git status` must be clean (depends on T028–T034)
 
 ---
