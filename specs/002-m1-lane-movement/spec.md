@@ -17,6 +17,18 @@ given by the owner in the `/speckit-specify` request)
 > left to the plan. "Golden Axe style" describes the genre's movement model only; no character,
 > asset or look from that game is used (Principle VI).
 
+## Clarifications
+
+### Session 2026-11-19
+
+- Q: Should the pillars be solid, so the hero has to walk around them, or should the hero be able
+  to walk through a pillar's base? → A: Not solid. The hero can walk through a pillar's base; the
+  pillars only test depth sorting. Collision waits for a milestone that needs it.
+- Q: Should the pillar positions and the hero's starting spot be set in the scene in the Godot
+  editor, or in the data file next to the tuning values? → A: In the scene. Layout is level design
+  placed in the editor; the data file holds only values tuned by trying numbers (speeds, lane
+  limits).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Walk the hero around the lane (Priority: P1)
@@ -168,7 +180,9 @@ clock with the window in front, watching the FPS counter. Then run the Quality G
   horizontal band (the lane) across the lower part of the screen.
 - **FR-002**: The scene MUST contain one hero, a coloured rectangle taller than it is wide, standing
   in the lane, and two or three tall placeholder pillars whose bases stand in the lane at different
-  depths.
+  depths. The pillars MUST NOT block the hero: it can walk through a pillar's base. Where the
+  pillars stand and where the hero starts MUST be set in the scene in the editor, not in the
+  tuning data file; the hero starts inside the lane.
 - **FR-003**: The player MUST be able to move the hero left, right, up (deeper into the lane) and
   down (nearer) with the arrow keys and with W, A, S and D, both sets working at the same time.
 - **FR-004**: A direction press MUST move the hero at full speed on the frame the press is
@@ -211,7 +225,7 @@ clock with the window in front, watching the FPS counter. Then run the Quality G
 - **Lane**: the strip of ground the hero walks on. Has a top and a bottom (the range the feet may
   occupy); its left and right limits are the screen edges. Its top and bottom are tuning values.
 - **Pillar**: a tall placeholder object standing in the lane. Has a base position that sets its
-  depth. It does not move and does not block the hero (see Assumptions).
+  depth. It does not move and does not block the hero (FR-002).
 - **Movement tuning**: the tuning values for M1: horizontal speed, vertical speed, lane top and
   lane bottom. They live in the project-wide tuning data file chosen in M0.
 - **Player 1 controls**: the four direction actions for player 1, each bound to an arrow key and a
@@ -251,13 +265,9 @@ clock with the window in front, watching the FPS counter. Then run the Quality G
   diagonal is never faster than a straight line. The plan picks the exact formula.
 - **Feet, not head, are limited by the lane**: the hero's top may extend above the lane band, as a
   standing figure would.
-- **Pillars do not block the hero**: they are scenery used to prove depth sorting. The hero can
-  walk through a pillar's base area. Solid obstacles are not part of M1's must-have list.
 - **Tie at equal depth**: when the hero's feet and a pillar's base are at exactly the same height,
   the hero is drawn in front. Any fixed rule meets FR-009; this one was chosen so the player is
   never hidden by a tie.
-- **Pillar and hero placement** (where the pillars stand, where the hero starts) are level layout
-  set in the scene, not tuning values. The hero starts inside the lane.
 - **Target hardware is the Intel UHD 630.** The owner's acceptance check 8 says UHD 620, but
   constitution v1.3.2 corrected the target to the UHD 630, the GPU in the owner's machine, so this
   spec uses the 630.
