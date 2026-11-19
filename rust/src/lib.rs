@@ -1,5 +1,6 @@
 //! Beastrider's game rules and state, exposed to Godot as a GDExtension library.
 
+mod drifting_square;
 mod tuning;
 
 use godot::prelude::*;
