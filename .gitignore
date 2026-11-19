@@ -1,0 +1,5 @@
+# Rust build output (cargo).
+rust/target/
+
+# Godot editor cache and imported-asset data; regenerated on open.
+godot/.godot/
