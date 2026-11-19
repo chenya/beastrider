@@ -33,7 +33,7 @@ In the editor, press **Play** (F5).
 Each item points back to the spec. Tick them off at the end of the milestone.
 
 | # | Spec | Do | Expect |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | US1, FR-001–006 | Press Play | A 1280×720 window with a dark background, one coloured square drifting left to right, a "Speed: 160 px/s" label and an FPS counter |
 | 2 | US1, FR-003 | Watch the square reach the right edge | It leaves fully, then comes in from the left at the same speed |
 | 3 | US1, FR-011, SC-004 | Read the Output panel at startup and after 60 s of play | No errors. The startup lines show the Compatibility renderer (OpenGL) on the Intel/Mesa GPU, not `llvmpipe` |
@@ -54,5 +54,9 @@ Each item points back to the spec. Tick them off at the end of the milestone.
 - **FPS below 60, or stuttering**: first check that the Output panel names the Intel/Mesa GPU.
   Then log in with "Ubuntu on Xorg" and repeat scenario 4 to tell XWayland problems apart from
   others ([research.md R5](research.md)).
+- **FPS drops to exactly 1, then recovers**: the game window was hidden or lost focus (for
+  example, the editor came to the front). GNOME throttles hidden windows to about one frame per
+  second, so this is not a performance problem. Keep the game window in front and focused while
+  measuring.
 - **Rust changes not showing**: the library reloads on rebuild (`reloadable = true`). If it
   doesn't, restart the editor.
