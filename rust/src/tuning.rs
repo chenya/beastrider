@@ -202,7 +202,7 @@ mod tests {
     #[test]
     fn accepts_zero_and_positive_speeds() {
         assert_eq!(SquareTuning::try_new(0.0).map(|t| t.speed()), Ok(0.0));
-        assert_eq!(SquareTuning::try_new(160.0).map(|t| t.speed()), Ok(160.0));
+        assert_eq!(SquareTuning::try_new(42.5).map(|t| t.speed()), Ok(42.5));
     }
 
     #[test]
