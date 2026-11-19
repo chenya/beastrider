@@ -1,0 +1,37 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/speed_label.gd" id="1_0xm2m"]
+[ext_resource type="Script" path="res://ui/fps_label.gd" id="2_h2yge"]
+
+[node name="Main" type="Node2D" unique_id=834148524]
+
+[node name="DriftingSquare" type="DriftingSquare" parent="." unique_id=20975412]
+position = Vector2(0, 328)
+
+[node name="Body" type="ColorRect" parent="DriftingSquare" unique_id=787930726]
+offset_right = 64.0
+offset_bottom = 64.0
+color = Color(0.9098039, 0.4745098, 0.16862746, 1)
+
+[node name="Hud" type="CanvasLayer" parent="." unique_id=1748180219]
+
+[node name="SpeedLabel" type="Label" parent="Hud" unique_id=502232410 node_paths=PackedStringArray("square")]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 68.0
+offset_bottom = 39.0
+text = "Speed:"
+script = ExtResource("1_0xm2m")
+square = NodePath("../../DriftingSquare")
+
+[node name="FpsLabel" type="Label" parent="Hud" unique_id=599506407]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -48.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 39.0
+grow_horizontal = 0
+text = "FPS:"
+script = ExtResource("2_h2yge")
