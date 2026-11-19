@@ -49,7 +49,7 @@ wraps at least once, the speed label shows a number, and the FPS counter is visi
 
 ### User Story 2 - Holds 60 fps on the target machine (Priority: P1)
 
-The owner runs the game on their own machine (Ubuntu 24.04 LTS, Intel UHD 620, stock Mesa driver,
+The owner runs the game on their own machine (Ubuntu 24.04 LTS, Intel UHD 630, stock Mesa driver,
 V-Sync on) and watches the FPS counter for one minute.
 
 **Why this priority**: Principle V makes 60 fps on this hardware a hard rule. Finding out now,

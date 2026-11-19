@@ -139,7 +139,7 @@ scenarios 1–3).
 
 ## Phase 4: User Story 2 – Holds 60 fps on the target machine (Priority: P1)
 
-**Goal**: Confirm a steady 60 fps with V-Sync on, on the UHD 620, using the Compatibility renderer.
+**Goal**: Confirm a steady 60 fps with V-Sync on, on the UHD 630, using the Compatibility renderer.
 
 **Independent Test**: Quickstart scenario 4 (watch the FPS counter for 60 s), backed by scenarios
 3 and 9.
@@ -263,7 +263,7 @@ Task: "Create godot/ui/fps_label.gd (reads Engine.get_frames_per_second())"
 
 1. Setup + Foundational → builds, loads, tests pass (end of session 1)
 2. Add US1 → playable (end of session 2) → MVP
-3. Add US2 → 60 fps proven on the UHD 620
+3. Add US2 → 60 fps proven on the UHD 630
 4. Add US3 → data-driven tuning proven, error paths checked
 5. Add US4 + Polish → Quality Gate green, committed (end of session 3) → M0 done
 

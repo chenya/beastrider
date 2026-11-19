@@ -1,7 +1,7 @@
 # Quickstart: M0 Setup – Toolchain Proof
 
 How to go from a fresh checkout to pressing Play (FR-013), then check every M0 acceptance item.
-Run it on the target machine (Ubuntu 24.04 LTS, Intel UHD 620). Versions come from
+Run it on the target machine (Ubuntu 24.04 LTS, Intel UHD 630). Versions come from
 [research.md](research.md).
 
 ## Prerequisites (once per machine)

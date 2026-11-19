@@ -117,12 +117,12 @@ looked up are marked with where they came from.
 - **Sources**: [Godot 4.6 docs: Wayland and X11](https://docs.godotengine.org/en/4.6/tutorials/platform/linux/wayland_x11.html),
   [Godot 4.7 docs: Wayland and X11](https://docs.godotengine.org/en/4.7/tutorials/platform/linux/wayland_x11.html).
 
-## R6. Compatibility renderer on the UHD 620
+## R6. Compatibility renderer on the UHD 630
 
 - **Decision**: In project settings, set `rendering/renderer/rendering_method` to
   `gl_compatibility` for both desktop and mobile. Keep V-Sync at its default, Enabled
   (`display/window/vsync/vsync_mode`).
-- **Rationale**: Required by Principle V. The UHD 620 on Mesa's `iris` driver supports OpenGL
+- **Rationale**: Required by Principle V. The UHD 630 on Mesa's `iris` driver supports OpenGL
   well above the 3.3 that the Compatibility renderer needs. M0 draws one rectangle and two labels,
   so 60 fps has a huge margin. The point of the check is to prove the setup (driver, V-Sync,
   XWayland), not the content.

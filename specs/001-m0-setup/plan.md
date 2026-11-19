@@ -34,12 +34,12 @@ crate `godot` **=0.5.5** with feature `api-4-6` (MPL-2.0). No other crates or ad
 **Testing**: `cargo test` for pure Rust logic (wrap maths, speed checks); everything else is
 checked by playing, using the scenarios in [quickstart.md](quickstart.md).
 
-**Target Platform**: Ubuntu 24.04 LTS desktop, Intel UHD 620 with the stock Mesa driver. Runs
+**Target Platform**: Ubuntu 24.04 LTS desktop, Intel UHD 630 with the stock Mesa driver. Runs
 through XWayland in the default Wayland session; no setting needed ([research.md R5](research.md)).
 
 **Project Type**: Desktop game. A Godot project plus a Rust GDExtension library.
 
-**Performance Goals**: A steady 60 fps at 1280×720 with V-Sync on, on the UHD 620.
+**Performance Goals**: A steady 60 fps at 1280×720 with V-Sync on, on the UHD 630.
 
 **Constraints**: Compatibility renderer only. No magic tuning numbers in code. GDScript holds no
 game state. Offline, single machine. The milestone is sized for 2–3 sessions.
@@ -53,7 +53,7 @@ CLARIFICATION.
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Constitution v1.3.1. ✅ = passes, ➖ = does not apply to M0.
+Constitution v1.3.2. ✅ = passes, ➖ = does not apply to M0.
 
 | Rule | Pre-research | Post-design | How M0 meets it |
 |---|---|---|---|
@@ -61,7 +61,7 @@ Constitution v1.3.1. ✅ = passes, ➖ = does not apply to M0.
 | **II. One Milestone at a Time** | ✅ | ✅ | Only M0 items are included. Out-of-scope items (input, lane, enemies, art, sound, debug overlay) are excluded by FR-014. Nothing from the Not-doing list. About 2–3 sessions of work. |
 | **III. Architecture Serves the Game** | ✅ | ✅ | Each piece names its problem: `DriftingSquare` because rules and state must live in Rust; a `tuning` module because loading and checking data is a separate job that later sections will reuse; a pure `wrap_x` function because the wrap must work at any speed and be testable without Godot. No state machine (two states fit in an `Option`), no signals (the speed never changes after start), no serde (one value). |
 | **IV. Data-Driven Tuning** | ✅ | ✅ | Speed comes from `tuning.json`, with no default in code. The square's size and colour are placeholder looks set in the scene, not tuning values. |
-| **V. Runs Well on Weak Hardware** | ✅ | ✅ | `gl_compatibility`, V-Sync on, 1280×720. No shaders, lights or particles. The 60 fps check is done on the UHD 620, and the startup log must show the Intel/Mesa GPU. |
+| **V. Runs Well on Weak Hardware** | ✅ | ✅ | `gl_compatibility`, V-Sync on, 1280×720. No shaders, lights or particles. The 60 fps check is done on the UHD 630, and the startup log must show the Intel/Mesa GPU. |
 | **VI. Original Art, Cheap Animation** | ✅ | ✅ | Placeholder only: one `ColorRect` and default-font labels. No outside assets, so the assets log is not needed yet (it is created with the first non-placeholder asset). |
 | **VII. Co-op Ready, Local Only** | ✅ | ✅ | No player, no input, no camera in M0, so nothing assumes "the player". No networking. |
 | **VIII. Always Debuggable** | ✅ | ✅ | The debug overlay is due at M2 and the restart key at M3, so neither is needed yet. Under git from the first session; M0 ends with a commit. |
