@@ -1,5 +1,10 @@
 {
-  "drifting_square": {
-    "speed": 160
+  "hero": {
+    "horizontal_speed": 300,
+    "vertical_speed": 180
+  },
+  "lane": {
+    "top": 430,
+    "bottom": 700
   }
 }

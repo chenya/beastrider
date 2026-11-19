@@ -15,11 +15,19 @@ use godot::tools::GFile;
 /// Godot path of the tuning data file. This is a file location, not a tuning value.
 pub const TUNING_PATH: &str = "res://data/tuning.json";
 
-/// Section of the tuning file read by `DriftingSquare`.
-const SQUARE_SECTION: &str = "drifting_square";
+/// Section of the tuning file holding the hero's movement speeds.
+const HERO_SECTION: &str = "hero";
 
-/// Key of the square's speed inside [`SQUARE_SECTION`].
-const SPEED_KEY: &str = "speed";
+/// Section of the tuning file holding the lane's limits.
+const LANE_SECTION: &str = "lane";
+
+/// Keys inside [`HERO_SECTION`].
+const HORIZONTAL_SPEED_KEY: &str = "horizontal_speed";
+const VERTICAL_SPEED_KEY: &str = "vertical_speed";
+
+/// Keys inside [`LANE_SECTION`].
+const LANE_TOP_KEY: &str = "top";
+const LANE_BOTTOM_KEY: &str = "bottom";
 
 /// Why the tuning data could not be used. Every message names the file and the problem, and
 /// the field path where there is one, so the owner can fix the file without reading code.
@@ -73,46 +81,157 @@ impl fmt::Display for TuningError {
 
 impl std::error::Error for TuningError {}
 
-/// Checked tuning for the drifting square. It can only be built through
-/// [`SquareTuning::try_new`], so an instance always holds valid values.
+/// Checked movement tuning: the hero's speeds and the lane's limits. It can only be built through
+/// [`MovementTuning::try_new`], so an instance always holds valid values.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SquareTuning {
-    speed: f32,
+pub struct MovementTuning {
+    horizontal_speed: f32,
+    vertical_speed: f32,
+    lane_top: f32,
+    lane_bottom: f32,
 }
 
-impl SquareTuning {
-    /// Builds the tuning from a raw speed in pixels per second.
+impl MovementTuning {
+    /// Builds the tuning from raw values: speeds in pixels per second, lane limits in pixels from
+    /// the top of the screen.
     ///
-    /// Accepts only values that are finite and `>= 0` once converted to `f32`. `0` is valid and
-    /// means the square stays still.
-    pub fn try_new(speed: f64) -> Result<Self, TuningError> {
-        // Convert first: a huge but finite f64 becomes infinite as f32 and must be rejected too.
-        let speed_f32 = speed as f32;
-        if speed_f32.is_finite() && speed_f32 >= 0.0 {
-            Ok(Self { speed: speed_f32 })
-        } else {
-            Err(invalid_value(
-                &speed_field(),
-                speed.to_string(),
-                "must be a finite number >= 0".to_string(),
-            ))
+    /// Each value is converted to `f32` first, so a huge but finite number that overflows is
+    /// rejected too. Speeds must be finite and `> 0`; the lane top must be finite, `>= 0` and
+    /// `<` the lane bottom; the lane bottom must be finite. Whether the lane fits the screen is
+    /// checked separately by [`check_lane_fits`], because only the caller knows the screen height.
+    pub fn try_new(
+        horizontal_speed: f64,
+        vertical_speed: f64,
+        lane_top: f64,
+        lane_bottom: f64,
+    ) -> Result<Self, TuningError> {
+        let positive = "must be a finite number > 0";
+        let horizontal = checked(
+            horizontal_speed,
+            HERO_SECTION,
+            HORIZONTAL_SPEED_KEY,
+            positive,
+            |v| v > 0.0,
+        )?;
+        let vertical = checked(
+            vertical_speed,
+            HERO_SECTION,
+            VERTICAL_SPEED_KEY,
+            positive,
+            |v| v > 0.0,
+        )?;
+        let bottom = checked(
+            lane_bottom,
+            LANE_SECTION,
+            LANE_BOTTOM_KEY,
+            "must be a finite number",
+            |_| true,
+        )?;
+        let top = checked(
+            lane_top,
+            LANE_SECTION,
+            LANE_TOP_KEY,
+            "must be a finite number >= 0",
+            |v| v >= 0.0,
+        )?;
+        if top >= bottom {
+            return Err(invalid_value(
+                &field_path(LANE_SECTION, LANE_TOP_KEY),
+                lane_top.to_string(),
+                format!(
+                    "must be less than {} ({lane_bottom})",
+                    field_path(LANE_SECTION, LANE_BOTTOM_KEY)
+                ),
+            ));
         }
+        Ok(Self {
+            horizontal_speed: horizontal,
+            vertical_speed: vertical,
+            lane_top: top,
+            lane_bottom: bottom,
+        })
     }
 
-    /// Horizontal speed in pixels per second.
-    pub fn speed(&self) -> f32 {
-        self.speed
+    /// Speed along the lane, in pixels per second.
+    pub fn horizontal_speed(&self) -> f32 {
+        self.horizontal_speed
+    }
+
+    /// Speed into and out of the lane, in pixels per second.
+    pub fn vertical_speed(&self) -> f32 {
+        self.vertical_speed
+    }
+
+    /// The highest y (furthest into the lane) a character's feet may reach.
+    pub fn lane_top(&self) -> f32 {
+        self.lane_top
+    }
+
+    /// The lowest y (nearest the player) a character's feet may reach.
+    pub fn lane_bottom(&self) -> f32 {
+        self.lane_bottom
     }
 }
 
-/// Reads [`TUNING_PATH`] and returns the checked drifting-square tuning.
+/// Checks that the lane ends on the screen: `lane.bottom` must not be below `screen_height`.
+pub fn check_lane_fits(tuning: &MovementTuning, screen_height: f32) -> Result<(), TuningError> {
+    if tuning.lane_bottom <= screen_height {
+        Ok(())
+    } else {
+        Err(invalid_value(
+            &field_path(LANE_SECTION, LANE_BOTTOM_KEY),
+            tuning.lane_bottom.to_string(),
+            format!("must be at most the screen height ({screen_height})"),
+        ))
+    }
+}
+
+/// Reads [`TUNING_PATH`] and returns the checked movement tuning.
 ///
 /// Unknown keys are ignored, so sections can be added before the code that reads them.
-pub fn load_square_tuning() -> Result<SquareTuning, TuningError> {
+pub fn load_movement_tuning() -> Result<MovementTuning, TuningError> {
     let root = read_json_object()?;
-    let section = object_field(&root, SQUARE_SECTION, SQUARE_SECTION)?;
-    let speed = number_field(&section, SPEED_KEY, &speed_field())?;
-    SquareTuning::try_new(speed)
+    let hero = object_field(&root, HERO_SECTION, HERO_SECTION)?;
+    let lane = object_field(&root, LANE_SECTION, LANE_SECTION)?;
+    MovementTuning::try_new(
+        number_field(
+            &hero,
+            HORIZONTAL_SPEED_KEY,
+            &field_path(HERO_SECTION, HORIZONTAL_SPEED_KEY),
+        )?,
+        number_field(
+            &hero,
+            VERTICAL_SPEED_KEY,
+            &field_path(HERO_SECTION, VERTICAL_SPEED_KEY),
+        )?,
+        number_field(&lane, LANE_TOP_KEY, &field_path(LANE_SECTION, LANE_TOP_KEY))?,
+        number_field(
+            &lane,
+            LANE_BOTTOM_KEY,
+            &field_path(LANE_SECTION, LANE_BOTTOM_KEY),
+        )?,
+    )
+}
+
+/// Converts `raw` to `f32` and accepts it only if it is finite and passes `rule`; otherwise
+/// returns an error naming `section.key`, the raw value and `requirement`.
+fn checked(
+    raw: f64,
+    section: &str,
+    key: &str,
+    requirement: &str,
+    rule: impl Fn(f32) -> bool,
+) -> Result<f32, TuningError> {
+    let value = raw as f32;
+    if value.is_finite() && rule(value) {
+        Ok(value)
+    } else {
+        Err(invalid_value(
+            &field_path(section, key),
+            raw.to_string(),
+            requirement.to_string(),
+        ))
+    }
 }
 
 /// Reads and parses the tuning file, requiring a JSON object at the top level.
@@ -191,34 +310,96 @@ fn invalid_value(field: &str, value: String, reason: String) -> TuningError {
     }
 }
 
-fn speed_field() -> String {
-    format!("{SQUARE_SECTION}.{SPEED_KEY}")
+/// The dotted path of a field, as written in error messages (for example `hero.vertical_speed`).
+fn field_path(section: &str, key: &str) -> String {
+    format!("{section}.{key}")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn accepts_zero_and_positive_speeds() {
-        assert_eq!(SquareTuning::try_new(0.0).map(|t| t.speed()), Ok(0.0));
-        assert_eq!(SquareTuning::try_new(42.5).map(|t| t.speed()), Ok(42.5));
+    // Valid values, deliberately different from the starting values in tuning.json.
+    const HORIZONTAL: f64 = 250.0;
+    const VERTICAL: f64 = 150.0;
+    const TOP: f64 = 400.0;
+    const BOTTOM: f64 = 650.0;
+    const NOT_FINITE: [f64; 3] = [f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
+
+    fn message(result: Result<MovementTuning, TuningError>) -> String {
+        result.expect_err("should be rejected").to_string()
     }
 
     #[test]
-    fn rejects_negative_nan_and_infinite_speeds() {
-        for bad in [-5.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 1e300] {
-            assert!(SquareTuning::try_new(bad).is_err(), "accepted {bad}");
+    fn accepts_valid_values() {
+        let tuning = MovementTuning::try_new(HORIZONTAL, VERTICAL, TOP, BOTTOM)
+            .expect("all values are valid");
+        assert_eq!(tuning.horizontal_speed(), 250.0);
+        assert_eq!(tuning.vertical_speed(), 150.0);
+        assert_eq!(tuning.lane_top(), 400.0);
+        assert_eq!(tuning.lane_bottom(), 650.0);
+    }
+
+    #[test]
+    fn rejects_speeds_that_are_not_finite_and_positive() {
+        for bad in [0.0, -5.0, 1e300].into_iter().chain(NOT_FINITE) {
+            assert!(
+                MovementTuning::try_new(bad, VERTICAL, TOP, BOTTOM).is_err(),
+                "{bad}"
+            );
+            assert!(
+                MovementTuning::try_new(HORIZONTAL, bad, TOP, BOTTOM).is_err(),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_a_lane_top_above_the_screen_or_not_above_the_bottom() {
+        for bad_top in [-1.0, BOTTOM, BOTTOM + 1.0].into_iter().chain(NOT_FINITE) {
+            assert!(
+                MovementTuning::try_new(HORIZONTAL, VERTICAL, bad_top, BOTTOM).is_err(),
+                "{bad_top}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_a_lane_bottom_that_is_not_finite() {
+        for bad_bottom in NOT_FINITE {
+            assert!(
+                MovementTuning::try_new(HORIZONTAL, VERTICAL, TOP, bad_bottom).is_err(),
+                "{bad_bottom}"
+            );
         }
     }
 
     #[test]
     fn rejection_message_names_file_field_and_value() {
-        let message = SquareTuning::try_new(-5.0)
-            .expect_err("-5 is negative")
+        let speed = message(MovementTuning::try_new(HORIZONTAL, -5.0, TOP, BOTTOM));
+        assert!(speed.contains("res://data/tuning.json"), "{speed}");
+        assert!(speed.contains("hero.vertical_speed"), "{speed}");
+        assert!(speed.contains("-5"), "{speed}");
+
+        let lane = message(MovementTuning::try_new(HORIZONTAL, VERTICAL, 666.0, BOTTOM));
+        assert!(lane.contains("res://data/tuning.json"), "{lane}");
+        assert!(lane.contains("lane.top"), "{lane}");
+        assert!(lane.contains("666"), "{lane}");
+    }
+
+    #[test]
+    fn lane_fits_a_screen_exactly_as_tall_as_its_bottom() {
+        let tuning = MovementTuning::try_new(HORIZONTAL, VERTICAL, TOP, BOTTOM).expect("valid");
+        assert_eq!(check_lane_fits(&tuning, 650.0), Ok(()));
+    }
+
+    #[test]
+    fn lane_below_the_screen_is_rejected_naming_lane_bottom() {
+        let tuning = MovementTuning::try_new(HORIZONTAL, VERTICAL, TOP, BOTTOM).expect("valid");
+        let error = check_lane_fits(&tuning, 600.0)
+            .expect_err("650 > 600")
             .to_string();
-        assert!(message.contains("res://data/tuning.json"), "{message}");
-        assert!(message.contains("drifting_square.speed"), "{message}");
-        assert!(message.contains("-5"), "{message}");
+        assert!(error.contains("lane.bottom"), "{error}");
+        assert!(error.contains("650"), "{error}");
     }
 }
