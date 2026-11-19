@@ -22,7 +22,6 @@ gdscript/warnings/untyped_declaration=2
 
 window/size/viewport_width=1280
 window/size/viewport_height=720
-window/vsync/vsync_mode=1
 
 [rendering]
 
