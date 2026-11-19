@@ -125,7 +125,7 @@ scenarios 1–3).
 
   (depends on T017, so that the `DriftingSquare` type is known to the editor)
 - [X] T019 [P] [US1] Create `godot/ui/fps_label.gd`: `extends Label`, a `##` class doc comment, and `func _process(_delta: float) -> void:` setting `text = "FPS: %d" % Engine.get_frames_per_second()`. No variables. Tabs.
-- [ ] T020 [US1] (owner) In the Godot editor, build and save `godot/main.tscn`:
+- [X] T020 [US1] (owner) In the Godot editor, build and save `godot/main.tscn`:
   - root `Node2D` named `Main`;
   - child `DriftingSquare` at position `(0, 328)`, with child `ColorRect` named `Body` at `(0, 0)`, size `64×64`, in a bright saturated placeholder colour such as orange `#E8792B`;
   - child `CanvasLayer` named `Hud`, holding a `Label` named `SpeedLabel` (top-left preset with a 16 px margin, script `res://ui/speed_label.gd`, `square` set to the `DriftingSquare` node) and a `Label` named `FpsLabel` (top-right preset with a 16 px margin, script `res://ui/fps_label.gd`).
