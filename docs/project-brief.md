@@ -1,6 +1,6 @@
 # Beastrider: Project Brief and Milestone Plan
 
-As of 2026-11-20. Status: M0 and M1 done and merged into main (the owner is working through Spec Kit milestone by milestone, one branch each); M2 split into M2a (debug overlay, branch `feat/m2a-debug-overlay`, being specified) and M2b (hit and feel). Constitution v1.3.2. The live, editable copy is the doc "Beastrider: Project Brief and Milestone Plan"; this file is the project's shared-memory copy. If the two differ, ask the user which is current. The Spec Kit constitution is in `.specify/memory/constitution.md`.
+As of 2026-11-20. Status: M0 and M1 done and merged into main (the owner is working through Spec Kit milestone by milestone, one branch each); M2 split into M2a (debug overlay, branch `feat/m2a-debug-overlay`, being specified) and M2b (hit and feel). Constitution v1.3.3. The live, editable copy is the doc "Beastrider: Project Brief and Milestone Plan"; this file is the project's shared-memory copy. If the two differ, ask the user which is current. The Spec Kit constitution is in `.specify/memory/constitution.md`.
 
 ## Summary
 

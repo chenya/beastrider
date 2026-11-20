@@ -68,10 +68,12 @@ rewrite. Networking code is out of scope and MUST NOT be added.
 
 ### VIII. Always Debuggable
 
-From M2 onward the game MUST have a debug overlay with cheat keys: show hitboxes, refill health
-and magic, spawn an enemy. From M3 onward, when runs and game over exist, a single key MUST
-restart a run in under two seconds. The project is under version control from the first session,
-with a commit at the end of every passing milestone.
+From M2a onward the game MUST have a debug overlay, shown and hidden by a key, that is absent
+from release builds. Each cheat key MUST arrive with the thing it acts on, in the milestone the
+project brief names: show hitboxes and spawn an enemy with the first enemy (M2b), refill health
+with health (M3), refill magic with magic (M4). From M3 onward, when runs and game over exist, a
+single key MUST restart a run in under two seconds. The project is under version control from the
+first session, with a commit at the end of every passing milestone.
 
 ## Technology and Constraints
 
@@ -216,5 +218,9 @@ maker.
     layout, quote, operator, typing and comment rules added.
   - 1.3.2 (2026-11-19): target GPU corrected from Intel UHD 620 to Intel UHD 630, the GPU in
     the owner's machine, as reported by Godot at startup.
+  - 1.3.3 (2026-11-20): Principle VIII aligned with the project brief, which splits M2 into M2a
+    and M2b: the debug overlay is required from M2a, and each cheat key arrives with the thing
+    it acts on (hitboxes and spawn in M2b, refill health in M3, refill magic in M4) instead of
+    all at M2, when none of them exist yet.
 
-**Version**: 1.3.2 | **Ratified**: 2026-11-19 | **Last Amended**: 2026-11-19
+**Version**: 1.3.3 | **Ratified**: 2026-11-19 | **Last Amended**: 2026-11-20

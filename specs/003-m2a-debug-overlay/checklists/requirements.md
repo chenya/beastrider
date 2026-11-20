@@ -45,13 +45,11 @@
   FR-013 / SC-006; 8 → FR-012; 9 → US4 scenario 1 / SC-007; 10 → US4 scenarios 2–3 / SC-008.
 - **Check 9 names the UHD 620**; the spec uses the UHD 630, the target set by constitution v1.3.2.
   Recorded in Assumptions.
-- **Conflict with Principle VIII, not resolved by the spec**: the constitution says "From M2
-  onward the game MUST have a debug overlay with cheat keys: show hitboxes, refill health and
-  magic, spawn an enemy." The owner's description and the Project Brief
-  ([docs/project-brief.md](../../../docs/project-brief.md)) put those three cheats in M2b, M3
-  and M4, with what they act on. The spec follows the owner and the brief; the plan must either
-  record this as a departure in Complexity Tracking or the constitution must be amended first
-  (owner's decision).
+- **Principle VIII and the cheats**: constitution v1.3.2 required all cheat keys from M2. The
+  owner's description and the Project Brief
+  ([docs/project-brief.md](../../../docs/project-brief.md)) put them in M2b, M3 and M4, with what
+  they act on. Constitution v1.3.3 (2026-11-20) amended Principle VIII to match, so the spec
+  conforms and the plan has no departure to record.
 - **Defaults chosen instead of clarifications** (see Assumptions and Edge Cases): reload result
   shown even with the overlay hidden; all-or-nothing reload; first bad value reported; F5 recovers
   a hero stopped by bad startup tuning; the always-on FPS counter stays; the origin marker is drawn
