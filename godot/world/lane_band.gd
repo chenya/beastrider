@@ -1,16 +1,16 @@
 extends ColorRect
-## The lighter strip of ground the hero walks on, placed from the hero's lane limits.
+## The lighter strip of ground the hero walks on, placed from the lane limits in [TuningStore].
 ##
-## Holds no game state: the limits live only in [Hero], which reads them from the tuning file.
-## Stays zero-height (not drawn) if the hero failed to load its tuning.
-
-## The hero whose lane limits this band shows. Set in the editor.
-@export var hero: Hero
+## Holds no game state: it reads the limits from the [code]Tuning[/code] autoload when placed and
+## again after every successful tuning reload. Stays zero-height (not drawn) while
+## [code]Tuning[/code] has no valid values.
 
 
 func _ready() -> void:
-	# The band comes before the hero in the tree, so its _ready runs first.
-	if not hero.is_node_ready():
-		await hero.ready
-	position = Vector2(0.0, hero.lane_top())
-	size = Vector2(get_viewport_rect().size.x, hero.lane_bottom() - hero.lane_top())
+	Tuning.tuning_reloaded.connect(_place)
+	_place()
+
+
+func _place() -> void:
+	position = Vector2(0.0, Tuning.lane_top())
+	size = Vector2(get_viewport_rect().size.x, Tuning.lane_bottom() - Tuning.lane_top())

@@ -1,23 +1,28 @@
 //! The player-controlled hero: reads its own player's input and walks the lane.
 //!
-//! Rust owns the hero's position, speeds and limits; the scene only sets where it starts and what
-//! it looks like. Nothing here assumes a single player: the input actions are built from
-//! `player_index` (constitution, Principle VII).
+//! Rust owns the hero's position and movement; the scene only sets where it starts and what it
+//! looks like. Speeds and lane limits are read from the `Tuning` autoload every physics tick, never
+//! copied, so a tuning reload reaches the hero on the next tick. Nothing here assumes a single
+//! player: the input actions are built from `player_index` (constitution, Principle VII).
 
 use godot::classes::{INode2D, Input, InputMap, Node2D, Polygon2D};
 use godot::prelude::*;
 
 use crate::movement::{self, Limits, Speeds};
-use crate::tuning::{self, MovementTuning};
+use crate::tuning_store::TuningStore;
 
 /// Name of the child node whose polygon defines the hero's width (built in the editor).
 const BODY_PATH: &str = "Body";
 
+/// Where the `Tuning` autoload lives in the scene tree.
+const TUNING_PATH: &str = "/root/Tuning";
+
 /// A character walked around the lane by one player.
 ///
 /// The origin is at the hero's feet, so Godot's Y-sort draws it in front of anything whose base
-/// is higher on the screen. If its input actions, tuning or `Body` child are unusable, it reports
-/// one error in `ready()` and stays still.
+/// is higher on the screen. If its input actions, `Body` child or the `Tuning` autoload are
+/// unusable, it reports one error in `ready()` and never moves. While `Tuning` has no valid values
+/// it stands still, and it starts moving on the first tick after a successful reload.
 #[derive(GodotClass)]
 #[class(base = Node2D)]
 pub struct Hero {
@@ -25,15 +30,17 @@ pub struct Hero {
     #[export]
     player_index: i32,
     /// Everything needed to move; `None` until `ready()` succeeds, and for good if it fails.
-    active: Option<Active>,
+    setup: Option<Setup>,
     base: Base<Node2D>,
 }
 
-/// The state a hero needs to move, set up once in `ready()`.
-struct Active {
+/// What a hero checks once in `ready()`: the parts that a tuning reload cannot fix.
+struct Setup {
     actions: PlayerActions,
-    tuning: MovementTuning,
-    limits: Limits,
+    /// Half the `Body` width, so the whole hero stays on screen.
+    half_width: f32,
+    /// The single source of speeds and lane limits, read every tick.
+    tuning: Gd<TuningStore>,
 }
 
 /// One player's four direction actions, built once so no action name is typed elsewhere.
@@ -71,17 +78,17 @@ impl PlayerActions {
 impl INode2D for Hero {
     fn init(base: Base<Node2D>) -> Self {
         // Player 1 is the default controller for a hero placed in the editor; the scene can
-        // change it. `active` is a "not set up yet" marker, filled by `ready()`.
+        // change it. `setup` is a "not set up yet" marker, filled by `ready()`.
         Self {
             player_index: 1,
-            active: None,
+            setup: None,
             base,
         }
     }
 
     fn ready(&mut self) {
         match self.set_up() {
-            Ok(active) => self.active = Some(active),
+            Ok(setup) => self.setup = Some(setup),
             Err(message) => {
                 godot_error!("Hero: {message}");
             }
@@ -89,10 +96,13 @@ impl INode2D for Hero {
     }
 
     fn physics_process(&mut self, delta: f64) {
-        let Some(active) = &self.active else {
+        let Some(setup) = &self.setup else {
             return;
         };
-        let actions = &active.actions;
+        let Some(values) = setup.tuning.bind().values() else {
+            return;
+        };
+        let actions = &setup.actions;
         let input = Input::singleton().get_vector(
             &actions.left,
             &actions.right,
@@ -100,10 +110,16 @@ impl INode2D for Hero {
             &actions.down,
         );
         let speeds = Speeds {
-            horizontal: active.tuning.horizontal_speed(),
-            vertical: active.tuning.vertical_speed(),
+            horizontal: values.horizontal_speed(),
+            vertical: values.vertical_speed(),
         };
-        let limits = active.limits;
+        let screen_width = self.base().get_viewport_rect().size.x;
+        let limits = Limits {
+            min_x: setup.half_width,
+            max_x: screen_width - setup.half_width,
+            min_y: values.lane_top(),
+            max_y: values.lane_bottom(),
+        };
         let position = self.base().get_position();
         let (x, y) = movement::step(
             (position.x, position.y),
@@ -116,27 +132,11 @@ impl INode2D for Hero {
     }
 }
 
-#[godot_api]
 impl Hero {
-    /// The highest y (furthest into the lane) the hero's feet may reach, in pixels, or `0.0`
-    /// while the hero is stopped. Read-only: only the tuning file sets it.
-    #[func]
-    pub fn lane_top(&self) -> f32 {
-        self.active.as_ref().map_or(0.0, |a| a.tuning.lane_top())
-    }
-
-    /// The lowest y (nearest the player) the hero's feet may reach, in pixels, or `0.0` while
-    /// the hero is stopped. Read-only: only the tuning file sets it.
-    #[func]
-    pub fn lane_bottom(&self) -> f32 {
-        self.active.as_ref().map_or(0.0, |a| a.tuning.lane_bottom())
-    }
-}
-
-impl Hero {
-    /// Checks the player index, input actions, tuning, lane and `Body`, in that order, and
-    /// returns a ready-to-print message for the first problem.
-    fn set_up(&self) -> Result<Active, String> {
+    /// Checks the player index, input actions, `Body` and the `Tuning` autoload, in that order,
+    /// and returns a ready-to-print message for the first problem. Tuning values are not checked
+    /// here: they are read every tick, so a later reload can still fix them.
+    fn set_up(&self) -> Result<Setup, String> {
         if self.player_index < 1 {
             return Err(format!(
                 "player_index must be 1 or more, but is {}",
@@ -144,20 +144,15 @@ impl Hero {
             ));
         }
         let actions = PlayerActions::try_new(self.player_index)?;
-        let tuning = tuning::load_movement_tuning().map_err(|e| e.to_string())?;
-        let screen = self.base().get_viewport_rect().size;
-        tuning::check_lane_fits(&tuning, screen.y).map_err(|e| e.to_string())?;
         let half_width = self.body_half_width()?;
-        let limits = Limits {
-            min_x: half_width,
-            max_x: screen.x - half_width,
-            min_y: tuning.lane_top(),
-            max_y: tuning.lane_bottom(),
-        };
-        Ok(Active {
+        let tuning = self
+            .base()
+            .try_get_node_as::<TuningStore>(TUNING_PATH)
+            .ok_or_else(|| "the Tuning autoload is missing or is not a TuningStore".to_string())?;
+        Ok(Setup {
             actions,
+            half_width,
             tuning,
-            limits,
         })
     }
 

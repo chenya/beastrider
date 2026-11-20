@@ -3,6 +3,7 @@
 mod hero;
 mod movement;
 mod tuning;
+mod tuning_store;
 
 use godot::prelude::*;
 
