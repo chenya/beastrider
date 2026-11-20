@@ -85,8 +85,10 @@ Constitution v1.3.3. ✅ = passes, ➖ = does not apply to M2a.
 | **Code Style: shared naming** | ✅ | ✅ | `TuningStore`, `Hero` in Rust, the editor and GDScript; signal names identical on both sides. The autoload name `Tuning` differs from the class on purpose ([R2](research.md)). |
 | **Quality Gate** | ✅ | ✅ | `cargo fmt --check`, build and clippy with 0 warnings, `cargo test`, 0 GDScript warnings, and every check passed by playing (quickstart 1–17). |
 
-**Result**: both passes are green. One expected departure (scenes built by script, if the owner
-hands that task over) is recorded below, as in M1.
+**Result**: both passes are green. The T028 review after implementation found the work matches
+every row above; its one departure (scenes and settings changed by the agent, at the owner's
+request) is recorded below, as in M1. It also fixed an M0 bug the on-screen messages exposed:
+Godot counts JSON error lines from 0, so messages now add 1 to match the editor.
 
 ## Spec and input alignment
 
@@ -156,7 +158,7 @@ Rust gets one new module so `tuning.rs` stays the pure data-and-rules file.
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 | --- | --- | --- |
-| `main.tscn`, `autoload/tuning.tscn` and the Input Map may be changed by headless Godot scripts rather than by hand in the editor (Tech: "Scenes, nodes and animation are built in the Godot editor"), as in M0 and M1. Applies only if the owner hands these tasks to the agent. | The agent cannot use the editor GUI, and godot-mcp's scene tools fail on this project's untyped-declaration error. The result is an ordinary `.tscn` that opens and edits in the editor. | Building by hand in the editor is the default and stays available; relaxing the untyped-declaration error to let godot-mcp run was rejected because it would break the GDScript style rule. |
+| `main.tscn`, `autoload/tuning.tscn` and the Input Map were changed by the agent rather than by hand in the editor (Tech: "Scenes, nodes and animation are built in the Godot editor"), as in M0 and M1. The owner handed T002, T006, T008 and T012 over at the start of `/speckit-implement`. T002 (actions) and T006 (autoload) used `ProjectSettings`; T006 and T012 built scenes with `PackedScene.pack` + `ResourceSaver.save`; T008's two-line removal of `LaneBand.hero` was a direct text edit of `main.tscn`. | The agent cannot use the editor GUI, and godot-mcp's scene tools fail on this project's untyped-declaration error. The result is an ordinary `.tscn` that opens and edits in the editor. | Building by hand in the editor is the default and stays available; relaxing the untyped-declaration error to let godot-mcp run was rejected because it would break the GDScript style rule. |
 
 ## Follow-ups (outside M2a)
 
