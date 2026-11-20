@@ -18,6 +18,26 @@ the owner in the `/speckit-specify` request)
 > and from the owner's acceptance checks 10 and 11, not choices made by this spec. Every *how*
 > (node types, class names, data layout, how the freeze is done) is left to the plan.
 
+## Clarifications
+
+### Session 2026-11-20
+
+- Q: How should the length of the dummy's knockback slide be set: by its own tuning value, or
+  worked out from the knockback distance alone? → A: Its own value, **knockback time**: the dummy
+  covers the knockback distance in that time, slowing evenly to a stop. Setting either knockback
+  distance or knockback time to 0 turns knockback off.
+- Q: When a blow lands, should the screen shake start right away, during the freeze, or only after
+  the freeze ends? → A: Flash and shake start at impact and run through the freeze; the knockback
+  slide starts when the freeze ends.
+- Q: If attack is pressed during a swing's recovery, should the press be remembered so the next
+  swing starts as soon as the hero is free, or ignored? → A: Remember one press made during
+  recovery; the next swing starts on the first frame the hero is free. Presses during wind-up, the
+  active part or a freeze are still ignored.
+- Q: Where should F3 put a new dummy? → A: In front of the hero at its depth, starting just inside
+  reach; if a dummy already stands there, the new one steps half a dummy's width further along the
+  hero's facing, repeating until the spot is free, and is moved inside the lane and
+  screen if needed.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Swing at the dummy and land a hit (Priority: P1)
@@ -64,10 +84,10 @@ does not reach, faces away or is at a clearly different depth misses with no eff
 ### User Story 2 - Tune the impact live, one effect at a time (Priority: P1)
 
 The owner keeps the game running, changes the freeze length, flash length, shake strength or
-length, knockback distance, the swing's wind-up, active and recovery times, its reach, or the depth
-tolerance in the tuning data file, saves, and presses F5. The next swing uses the new values.
-Setting any effect's value to zero turns that effect off, so the owner can judge each effect on
-its own and then together.
+length, knockback distance or time, the swing's wind-up, active and recovery times, its reach, or
+the depth tolerance in the tuning data file, saves, and presses F5. The next swing uses the new
+values. Setting any effect's value to zero turns that effect off, so the owner can judge each
+effect on its own and then together.
 
 **Why this priority**: The owner tunes by feel. Weight comes from the balance of the four effects
 and the swing's timing, which can only be found by trying numbers quickly (Principle IV, M2a's live
@@ -163,9 +183,10 @@ clock, watching the FPS. Then run the Quality Gate and `git status`.
 
 ### Edge Cases
 
-- **Attack pressed during a swing**: ignored; there are no combos and no queued second swing. A new
-  swing can start once the recovery ends.
-- **Attack pressed during the impact freeze**: ignored, like during a swing.
+- **Attack pressed during wind-up or the active part**: ignored; there are no combos.
+- **Attack pressed during recovery**: remembered (one press only); a new, identical swing starts on
+  the first frame the hero is free. Several presses during recovery still give one swing.
+- **Attack pressed during the impact freeze**: ignored, like during wind-up and the active part.
 - **Attack held down**: one swing per press; holding the key does not swing repeatedly.
 - **Attack with a direction held**: the swing faces the way the hero last moved before the swing;
   the hero does not turn or move until the swing ends.
@@ -201,8 +222,10 @@ clock, watching the FPS. Then run the Quality Gate and `git status`.
 - **FR-002**: The hero MUST face the direction it last moved horizontally, and face right before it
   has moved.
 - **FR-003**: Pressing the attack action MUST start a swing made of three timed parts: wind-up,
-  active and recovery. A blow can land only during the active part. Pressing attack during a swing
-  or a freeze MUST be ignored; holding it MUST NOT repeat the swing.
+  active and recovery. A blow can land only during the active part. One attack press made during
+  recovery MUST be remembered and start the next swing on the first frame the hero is free; presses
+  during wind-up, the active part or a freeze MUST be ignored. Holding attack MUST NOT repeat the
+  swing.
 - **FR-004**: The hero MUST NOT move or turn during a swing, whatever keys are held.
 - **FR-005**: During the active part, a dummy MUST be hit when its body overlaps the swing's reach
   in front of the hero and the difference between the hero's depth and the dummy's depth (the
@@ -212,16 +235,19 @@ clock, watching the FPS. Then run the Quality Gate and `git status`.
 - **FR-007**: When a swing lands on one or more dummies, the game MUST: freeze play for the freeze
   length (once per swing, not per dummy); flash each hit dummy white for the flash length; shake
   the play area by the shake strength for the shake length; and push each hit dummy horizontally
-  away from the hero, slowing to a stop after the knockback distance.
+  away from the hero, covering the knockback distance in the knockback time and slowing evenly to
+  a stop. The flash and the shake MUST start at the moment of impact and keep running through the
+  freeze; the knockback slide MUST start when the freeze ends.
 - **FR-008**: Knockback MUST NOT move a dummy outside the lane or off the screen; it stops at the
   limit.
 - **FR-009**: The freeze length, flash length, shake strength, shake length, knockback distance,
-  wind-up time, active time, recovery time, reach and depth tolerance MUST be read from the tuning
-  data file, checked like the M1 values, and applied by F5 with the M2a reload rules (all or
-  nothing, the next swing uses them). None of them may appear as a literal value in code.
-- **FR-010**: A value of 0 for the freeze length, flash length, shake strength, shake length or
-  knockback distance MUST turn that effect off without affecting the others. The active time and
-  the reach MUST be greater than 0; wind-up, recovery and depth tolerance MAY be 0.
+  knockback time, wind-up time, active time, recovery time, reach and depth tolerance MUST be read
+  from the tuning data file, checked like the M1 values, and applied by F5 with the M2a reload
+  rules (all or nothing, the next swing uses them). None of them may appear as a literal value in
+  code.
+- **FR-010**: A value of 0 for the freeze length, flash length, shake strength, shake length,
+  knockback distance or knockback time MUST turn that effect off without affecting the others. The
+  active time and the reach MUST be greater than 0; wind-up, recovery and depth tolerance MAY be 0.
 - **FR-011**: Attack timing, hit detection, the depth rule, the facing rule and knockback MUST be
   owned by the rules side (Rust). The flash and the shake MUST be presentation (GDScript) reacting
   to a signal from the rules side.
@@ -233,7 +259,9 @@ clock, watching the FPS. Then run the Quality Gate and `git status`.
   the swing's reach while a blow can land. F2 MUST work whether the overlay panel is open or not,
   through a named input action.
 - **FR-015**: F3 MUST spawn one more dummy in the lane, inside the screen, through a named input
-  action. Spawned dummies behave exactly like the first.
+  action: in front of the hero at the hero's depth, starting just inside reach, and stepping half a
+  dummy's width further along the hero's facing for as long as that spot is already taken by a
+  dummy. Spawned dummies behave exactly like the first.
 - **FR-016**: The overlay panel MUST show a counter of hits landed since the game started, one per
   dummy hit.
 - **FR-017**: F2, F3, the hitbox drawing and the hit counter MUST be absent from release (exported)
@@ -256,9 +284,9 @@ clock, watching the FPS. Then run the Quality Gate and `git status`.
   its own.
 - **Hit**: one swing landing on one dummy. Starts the freeze (once per swing), the flash, the shake
   and the knockback, and adds one to the hit counter.
-- **Attack and impact tuning**: the ten new tuning values (freeze, flash, shake strength and
-  length, knockback distance, wind-up, active, recovery, reach, depth tolerance), in the same
-  tuning data file as M1's values.
+- **Attack and impact tuning**: the eleven new tuning values (freeze, flash, shake strength and
+  length, knockback distance and time, wind-up, active, recovery, reach, depth tolerance), in the
+  same tuning data file as M1's values.
 - **Debug actions** (extended): `debug_toggle_hitboxes` (F2) and `debug_spawn_dummy` (F3), beside
   M2a's two.
 
@@ -277,8 +305,9 @@ clock, watching the FPS. Then run the Quality Gate and `git status`.
   ends a frame outside the lane or the screen.
 - **SC-005**: In a frame-by-frame check, the hero's position does not change from the frame the
   swing starts to the frame it ends, with direction keys held throughout.
-- **SC-006**: Each of the ten tuning values, changed and applied with F5, visibly changes the next
-  swing; each of the five effects set to 0 disappears while the other effects remain.
+- **SC-006**: Each of the eleven tuning values, changed and applied with F5, visibly changes the
+  next swing; each of the four effects, with one of its values set to 0, disappears while the other
+  effects remain.
 - **SC-007**: With F2 on, every landed blow shows the reach overlapping the dummy's body, and every
   miss shows them apart or at a depth difference beyond the tolerance.
 - **SC-008**: In a release build, F2 and F3 have no visible effect, and the attack and the dummy
@@ -297,17 +326,14 @@ clock, watching the FPS. Then run the Quality Gate and `git status`.
 - **Starting values** (data, not requirements; the owner retunes them): wind-up about 0.08 s,
   active about 0.10 s, recovery about 0.18 s; reach about 70 px in front of the hero's body; depth
   tolerance about 20 px; freeze about 0.06 s; flash about 0.08 s; shake about 6 px for about
-  0.15 s; knockback about 60 px. The dummy is about 56×120 px.
-- **Order of the effects**: the flash shows from the moment of impact, including during the freeze;
-  the shake and the knockback slide play out after the freeze ends. The plan may adjust this if
-  playing shows a better order; the owner judges by feel (SC-011).
-- **The freeze stops play only**: the hero, dummies and timers stop; the FPS counter, the overlay
-  panel and debug keys keep working.
+  0.15 s; knockback about 60 px over about 0.2 s. The dummy is about 56×120 px.
+- **The freeze stops play only**: the hero, the dummies' slides and the swing timers stop; the
+  flash and shake (FR-007), the FPS counter, the overlay panel and debug keys keep running.
 - **The shake moves the play area only**: the HUD, overlay panel and messages stay still.
 - **Knockback is horizontal only**: the dummy keeps its depth; it slides along the lane.
-- **Spawn position** (F3): in front of the hero at the hero's depth, just inside reach, moved inside
-  the lane and screen if needed, so a new dummy can be hit straight away. Spawning is a debug
-  cheat, not level design, so it is not a tuning value.
+- **Spawn position** (F3, clarified above): the start point and the half-width step come from the
+  reach and the dummy's own shape, so no new tuning value is needed; spawning is a debug cheat, not
+  level design. If every step up to the screen edge is taken, the dummy is placed at the edge.
 - **Hitbox drawing**: outlines in placeholder colours; the reach is drawn only while a blow can
   land (the active part), so the owner sees exactly when and where it counts.
 - **Hit counter**: counts since the game started; F5 does not reset it. There is no restart in M2b
