@@ -247,7 +247,8 @@ fn read_json_object() -> Result<VarDictionary, TuningError> {
     if json.parse(&text) != GodotError::OK {
         return Err(TuningError::InvalidJson {
             path: TUNING_PATH.to_string(),
-            line: json.get_error_line(),
+            // Godot counts lines from 0; editors, and the owner, count from 1.
+            line: json.get_error_line() + 1,
             message: json.get_error_message().to_string(),
         });
     }
