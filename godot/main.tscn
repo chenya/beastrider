@@ -5,11 +5,10 @@
 
 [node name="Main" type="Node2D" unique_id=1385241709]
 
-[node name="LaneBand" type="ColorRect" parent="." unique_id=979664798 node_paths=PackedStringArray("hero")]
+[node name="LaneBand" type="ColorRect" parent="." unique_id=979664798]
 mouse_filter = 2
 color = Color(0.16470589, 0.16470589, 0.2, 1)
 script = ExtResource("1_0xm2m")
-hero = NodePath("../World/Hero")
 
 [node name="World" type="Node2D" parent="." unique_id=1779306900]
 y_sort_enabled = true
