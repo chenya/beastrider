@@ -1,7 +1,20 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://world/lane_band.gd" id="1_0xm2m"]
+[ext_resource type="Script" path="res://debug/debug_markers.gd" id="2_1bvp3"]
 [ext_resource type="Script" path="res://ui/fps_label.gd" id="2_h2yge"]
+[ext_resource type="Script" path="res://debug/debug_overlay.gd" id="4_lquwl"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_7mycd"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+bg_color = Color(0, 0, 0, 0.6)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
 
 [node name="Main" type="Node2D" unique_id=1385241709]
 
@@ -35,6 +48,11 @@ position = Vector2(460, 600)
 color = Color(0.9098039, 0.4745098, 0.16862746, 1)
 polygon = PackedVector2Array(-24, -96, 24, -96, 24, 0, -24, 0)
 
+[node name="DebugMarkers" type="Node2D" parent="." unique_id=1656156852 node_paths=PackedStringArray("hero")]
+z_index = 1
+script = ExtResource("2_1bvp3")
+hero = NodePath("../World/Hero")
+
 [node name="Hud" type="CanvasLayer" parent="." unique_id=1613323869]
 
 [node name="FpsLabel" type="Label" parent="Hud" unique_id=124840403]
@@ -48,3 +66,50 @@ offset_bottom = 39.0
 grow_horizontal = 0
 text = "FPS:"
 script = ExtResource("2_h2yge")
+
+[node name="DebugOverlay" type="CanvasLayer" parent="." unique_id=1270742065 node_paths=PackedStringArray("hero", "markers")]
+layer = 2
+script = ExtResource("4_lquwl")
+hero = NodePath("../World/Hero")
+markers = NodePath("../DebugMarkers")
+
+[node name="Panel" type="PanelContainer" parent="DebugOverlay" unique_id=2044389230]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 16.0
+offset_bottom = 16.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_7mycd")
+
+[node name="Lines" type="VBoxContainer" parent="DebugOverlay/Panel" unique_id=687568676]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="FpsLine" type="Label" parent="DebugOverlay/Panel/Lines" unique_id=1815746191]
+layout_mode = 2
+
+[node name="PositionLine" type="Label" parent="DebugOverlay/Panel/Lines" unique_id=1515893467]
+layout_mode = 2
+
+[node name="PlayerLine" type="Label" parent="DebugOverlay/Panel/Lines" unique_id=930244271]
+layout_mode = 2
+
+[node name="HorizontalSpeedLine" type="Label" parent="DebugOverlay/Panel/Lines" unique_id=1282757239]
+layout_mode = 2
+
+[node name="VerticalSpeedLine" type="Label" parent="DebugOverlay/Panel/Lines" unique_id=923398527]
+layout_mode = 2
+
+[node name="TuningLine" type="Label" parent="DebugOverlay/Panel/Lines" unique_id=772443240]
+layout_mode = 2
+
+[node name="Message" type="Label" parent="DebugOverlay" unique_id=979635810]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -0.5
+offset_top = 16.0
+offset_right = 0.5
+offset_bottom = 23.0
+grow_horizontal = 2
+horizontal_alignment = 1
