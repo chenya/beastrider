@@ -17,6 +17,21 @@ out-of-scope list as given by the owner in the `/speckit-specify` request)
 > owner's acceptance checks 6 and 8, not choices made by this spec. Every *how* (node types, class
 > names, how release builds leave the overlay out) is left to the plan.
 
+## Clarifications
+
+### Session 2026-11-20
+
+- Q: If the game starts with a bad tuning value (hero stopped) and the owner fixes the file and
+  presses F5, should the hero come to life without a restart? → A: Yes, for tuning errors only. A
+  successful reload makes the hero move; other startup errors (a missing input action, a bad hero
+  shape) still need a restart, because they come from the scene or project settings.
+- Q: Should the always-on FPS counter from M0 and M1 stay, or should the FPS appear only in the
+  overlay? → A: Keep both. The always-on counter stays where it is; the overlay also lists the FPS
+  and sits in a corner that does not cover the counter.
+- Q: When F5 is pressed with the overlay hidden, where does the result ("Tuning reloaded" or the
+  error) appear? → A: In its own small spot on screen, shown whether the overlay is open or not;
+  the overlay also lists the last reload result when it is open.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See what the game is doing (Priority: P1)
@@ -127,8 +142,8 @@ extra text and lines every frame, so the frame rate is checked with it open.
 1. **Given** the game runs on the target machine with V-Sync on and the overlay open, **When** the
    owner walks the hero for one minute, **Then** the FPS stays at 60 the whole time (the first
    second excepted).
-2. **Given** the M2a work is finished, **When** the owner runs `cargo fmt --check`, `cargo build` and
-   `cargo clippy` and opens the project in the editor, **Then** there are no warnings and no
+2. **Given** the M2a work is finished, **When** the owner runs `cargo fmt --check`, `cargo build`
+   and `cargo clippy` and opens the project in the editor, **Then** there are no warnings and no
    GDScript errors or warnings.
 3. **Given** the project has been built and played, **When** the owner runs `git status` after
    committing, **Then** the working tree is clean.
@@ -146,6 +161,9 @@ extra text and lines every frame, so the frame rate is checked with it open.
 - **The game started with bad tuning** (the hero is stopped, as in M1): the overlay shows the
   startup error. Fixing the file and pressing F5 applies the values and the hero can move, with no
   restart.
+- **The game started with a non-tuning error** (a missing input action, a hero shape with no
+  width): F5 does not bring the hero to life; the error stays and a restart is needed after fixing
+  the scene or project settings.
 - **The new lane leaves the hero outside it**: on the next frame the hero is placed at the nearest
   point inside the new lane, as M1 does for a hero that starts outside it.
 - **F5 held down**: one reload per press; holding the key does not reload repeatedly.
@@ -173,10 +191,12 @@ extra text and lines every frame, so the frame rate is checked with it open.
   feet), in front of everything else in the scene so it is visible even behind a pillar.
 - **FR-006**: Pressing F5 MUST reread the tuning data file and check every value in it, whether
   the overlay is open or not. If every value is valid, the new values MUST all take effect from the
-  next frame, with no restart: the hero's speeds, the hero's lane limits, the lane band, and the lane
-  lines.
-- **FR-007**: After a successful reload, the message "Tuning reloaded" MUST be shown for about 2
-  seconds, whether the overlay is open or not.
+  next frame, with no restart: the hero's speeds, the hero's lane limits, the lane band, and
+  the lane lines.
+- **FR-007**: The result of each reload MUST appear in its own small message spot on screen,
+  separate from the overlay panel and shown whether the overlay is open or not; the overlay also
+  lists the last reload result while it is open. After a successful reload, the message "Tuning
+  reloaded" MUST be shown for about 2 seconds.
 - **FR-008**: If the reread file is unreadable or any value is missing or invalid, the game MUST
   keep every previous value unchanged and MUST show a message naming the rejected value (file and
   field) and why it was rejected. The same error MUST also be written to the output panel, as in
@@ -185,15 +205,17 @@ extra text and lines every frame, so the frame rate is checked with it open.
   (M1: both speeds finite and greater than 0, lane top at least 0 and below lane bottom, lane
   bottom inside the screen).
 - **FR-010**: If the game started with invalid tuning, a successful reload MUST make the hero
-  active with the new values, with no restart.
+  active with the new values, with no restart. A hero stopped for any other reason (a missing
+  input action, a hero shape with no width) MUST stay stopped after a reload.
 - **FR-011**: Reading and checking the tuning data MUST stay on the rules side (Rust). The overlay
   MUST be presentation only (GDScript): it displays values it reads from the rules side and MUST
   NOT compute or store game state.
 - **FR-012**: The two debug keys MUST be named input actions, `debug_toggle_overlay` (F1) and
   `debug_reload_tuning` (F5), not checks for a specific key in code.
-- **FR-013**: In a release (exported) build, the overlay, the lane lines, the origin marker and the
-  reload MUST NOT be available: F1 and F5 do nothing.
-- **FR-014**: The always-on FPS counter from M0 and M1 MUST stay as it is. Everything M1 does
+- **FR-013**: In a release (exported) build, the overlay, the lane lines, the origin marker, the
+  reload and its message spot MUST NOT be available: F1 and F5 do nothing.
+- **FR-014**: The always-on FPS counter from M0 and M1 MUST stay as it is, visible whether the
+  overlay is open or not, and the overlay MUST NOT cover it. Everything M1 does
   (movement, limits, depth sorting, tuning at Play) MUST keep working unchanged.
 - **FR-015**: Nothing listed as out of scope (hitboxes, enemies, health, magic, the hit dummy,
   attacking, any cheat that acts on something not yet in the game, editing values from inside the
@@ -241,10 +263,8 @@ extra text and lines every frame, so the frame rate is checked with it open.
   spec uses the 630, as M1 did.
 - **Field names**: the owner's checks say `lane_top` and `lane_bottom`; in the tuning file since
   M1 these are `lane.top` and `lane.bottom`. Messages name the field by its path in the file.
-- **The FPS counter stays**: the overlay also lists the FPS, but the always-on counter from M0 is
-  kept, since earlier quickstarts and the 60 fps checks rely on it.
-- **Reload result is shown even with the overlay hidden**, so pressing F5 always gives feedback.
-  An error stays until the next reload; "Tuning reloaded" disappears after about 2 seconds.
+- **Message timing**: an error stays in the message spot until the next reload; "Tuning
+  reloaded" disappears after about 2 seconds.
 - **All-or-nothing reload**: one bad value rejects the whole file, so the game never runs with a
   mix of old and new values.
 - **Number format**: position and speeds are shown in pixels and pixels per second, rounded so
