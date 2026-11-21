@@ -29,6 +29,9 @@ sections. One file, one loader, all-or-nothing F5 reload (M2a).
 
 Units: times in seconds, sizes and distances in pixels.
 
+These starting values are also the shipped ones: the owner landed 30 hits with them and judged the
+impact weighty, not floaty (T027, 2026-11-20), so none was retuned.
+
 | Field | Rule (every value must also be a finite number) |
 | --- | --- |
 | `attack.active_time`, `attack.reach` | `> 0` |

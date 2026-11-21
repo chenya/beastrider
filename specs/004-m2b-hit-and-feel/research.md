@@ -26,9 +26,11 @@ installed Godot 4.7.2 and gdext 0.5.5 on 2026-11-20.
     any other phase.
   - In `rust/src/hero.rs`: `enum HeroMode { Free, Attacking { phase: SwingPhase, elapsed: f32,
     hit_this_swing: Vec<InstanceId> } }`.
-  - A pure `advance_swing(phase, elapsed, delta, timings) -> SwingStep` moves through the phases on
-    time, passing through zero-length parts in one tick (wind-up and recovery may be 0, FR-010), and
-    reports `Continue`, `Finished` or `Restart` (a queued press).
+  - A pure `advance_swing(phase, elapsed, delta, timings) -> SwingAdvance` moves through the
+    phases on time, passing through zero-length parts in one tick (wind-up and recovery may be 0,
+    FR-010), and reports `Continue`, `Finished` or `Restart` (a queued press). It also reports
+    whether the swing was active at any moment of the tick, so an active part shorter than one
+    tick still gets checked for hits (added during implementation).
   Every use is an exhaustive `match`; there is no `is_attacking` flag (FR-012). Movement input is
   read only in `Free`. Everything runs in `physics_process`.
 - **Attack press**: read with `Input.is_action_just_pressed(p1_attack)` in `physics_process`, which
@@ -108,10 +110,14 @@ installed Godot 4.7.2 and gdext 0.5.5 on 2026-11-20.
   later presentation; unused by M2b's effects). Emitted once per hit, at the moment of impact.
 - **Flash**: `godot/world/flash.gdshader`, a `canvas_item` shader with `uniform float flash_amount`
   mixing `COLOR.rgb` towards white, on the dummy's `Body` through a `ShaderMaterial`. A small script
-  on the dummy scene (`godot/world/dummy_flash.gd`) answers `was_hit` by tweening `flash_amount`
-  from 1 to 0 over `Tuning.flash_time()`; at 0 it does nothing. *Checked*: on the Compatibility
-  renderer (`gl_compatibility`, OpenGL 3) the shader compiles and a pixel goes from the body colour
-  to half-way to pure white at 0.5 and to `(1, 1, 1)` at 1.0, and a tween drives the uniform.
+  on the dummy's `Body` (`godot/world/dummy_flash.gd`, extends `Polygon2D`) answers its parent's
+  `was_hit` by tweening `flash_amount` from 1 to 0 over `Tuning.flash_time()`; at 0 it does
+  nothing. *Found during implementation*: the script must not sit on the `TrainingDummy` root. A
+  GDScript `_ready` on a node whose class is a Rust class replaces the Rust `ready()`, so the dummy
+  never joined the `hittable` group or found its autoloads and could not be hit. *Checked*: on the
+  Compatibility renderer (`gl_compatibility`, OpenGL 3) the shader compiles and a pixel goes from
+  the body colour to half-way to pure white at 0.5 and to `(1, 1, 1)` at 1.0, and a tween drives
+  the uniform.
   Reason for a shader (owner's): it keeps working when the placeholder becomes art at M5. The
   material is set **local to scene** so each dummy flashes on its own.
 - **Shake**: a `Camera2D` named `ShakeCamera`, first child of `Main`, `anchor_mode = FIXED_TOP_LEFT`
@@ -176,7 +182,7 @@ installed Godot 4.7.2 and gdext 0.5.5 on 2026-11-20.
 ## R9. Scene changes
 
 - **Decision**: New scene `godot/world/training_dummy.tscn`: `TrainingDummy` root, `Body`
-  `Polygon2D` (−28,−120)…(28,0) in a colour unlike the hero's, with the flash `ShaderMaterial`, and
+  `Polygon2D` (−28,−120)…(28,0) in a colour unlike the hero's, with the flash `ShaderMaterial` and
   `dummy_flash.gd`. `main.tscn` gains `ShakeCamera` (first child of `Main`), one `Dummy` instance in
   `World` before `Hero`, and `DebugHitboxes` after `DebugMarkers`; the overlay gains exports for
   the hitbox drawer, `World` and the dummy scene, and a `HitsLine` label. Input Map gains

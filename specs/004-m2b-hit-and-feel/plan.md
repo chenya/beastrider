@@ -82,8 +82,12 @@ Constitution v1.3.3. ✅ = passes, ➖ = does not apply to M2b.
 | **Code Style: shared naming** | ✅ | ✅ | `TrainingDummy`, `HitStopTimer`, `Hero` and `was_hit` are the same in Rust, the editor and GDScript; autoload names differ from class names on purpose ([R5](research.md)). |
 | **Quality Gate** | ✅ | ✅ | fmt, build and clippy with 0 warnings, `cargo test`, 0 GDScript warnings, every check passed by playing (quickstart 1–20), including the feel playtest. |
 
-**Result**: both passes are green. One expected departure (scenes built by script, if the owner
-hands that task over) is recorded below, as in M1 and M2a.
+**Result**: both passes are green. The T038 review after implementation found the work matches
+every row above; its one departure (scenes and settings changed by the agent, at the owner's
+request) is recorded below, as in M1 and M2a. Two design details were settled while building and
+are recorded in research: the flash script sits on the dummy's `Body`, because a script on the Rust
+`TrainingDummy` root replaces its `ready()` (R6); and `advance_swing` reports whether the swing was
+active at any moment of a tick, so an active part shorter than a tick still lands (R2).
 
 ## Spec and input alignment
 
@@ -141,7 +145,7 @@ godot/
 ├── autoload/
 │   └── hit_stop.tscn      # NEW: one HitStopTimer node
 ├── world/
-│   ├── training_dummy.tscn # NEW: TrainingDummy + Body (flash material) + dummy_flash.gd
+│   ├── training_dummy.tscn # NEW: TrainingDummy + Body (flash material, dummy_flash.gd)
 │   ├── flash.gdshader     # NEW: canvas_item flash towards white
 │   ├── dummy_flash.gd     # NEW: tweens flash_amount on was_hit
 │   └── screen_shake.gd    # NEW: Camera2D offset jitter on was_hit
@@ -160,7 +164,7 @@ as `movement.rs` is.
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 | --- | --- | --- |
-| `main.tscn`, `training_dummy.tscn`, `autoload/hit_stop.tscn` and the Input Map may be changed by the agent rather than by hand in the editor (Tech: "Scenes, nodes and animation are built in the Godot editor"), as in M0–M2a. Applies only if the owner hands those tasks over. | The agent cannot use the editor GUI, and godot-mcp's scene tools fail on this project's untyped-declaration error. The result is ordinary `.tscn` files that open in the editor. | Building by hand in the editor stays the default; relaxing the untyped-declaration error was rejected because it would break the GDScript style rule. |
+| `main.tscn`, `training_dummy.tscn`, `autoload/hit_stop.tscn` and the Input Map were changed by the agent rather than by hand in the editor (Tech: "Scenes, nodes and animation are built in the Godot editor"), as in M0–M2a. The owner handed T002, T008, T017 and T023 over at the start of `/speckit-implement`. They were done with `ProjectSettings` (actions, autoload) and `PackedScene.pack` + `ResourceSaver.save` (scenes); two small fixes to `training_dummy.tscn` (dropping a `null` shader parameter, moving the flash script to `Body`) were direct text edits. | The agent cannot use the editor GUI, and godot-mcp's scene tools fail on this project's untyped-declaration error. The result is ordinary `.tscn` files that open in the editor. | Building by hand in the editor stays the default; relaxing the untyped-declaration error was rejected because it would break the GDScript style rule. |
 
 ## Follow-ups (outside M2b)
 
