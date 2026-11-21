@@ -17,6 +17,7 @@ config/features=PackedStringArray("4.7")
 [autoload]
 
 Tuning="*res://autoload/tuning.tscn"
+HitStop="*res://autoload/hit_stop.tscn"
 
 [debug]
 
