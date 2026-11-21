@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://ui/fps_label.gd" id="2_h2yge"]
 [ext_resource type="PackedScene" path="res://world/training_dummy.tscn" id="3_272bh"]
 [ext_resource type="Script" path="res://debug/debug_overlay.gd" id="4_lquwl"]
+[ext_resource type="Script" path="res://debug/debug_hitboxes.gd" id="5_272bh"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_7mycd"]
 content_margin_left = 8.0
@@ -62,6 +63,12 @@ z_index = 1
 script = ExtResource("2_1bvp3")
 hero = NodePath("../World/Hero")
 
+[node name="DebugHitboxes" type="Node2D" parent="." unique_id=266206333 node_paths=PackedStringArray("hero", "world")]
+z_index = 1
+script = ExtResource("5_272bh")
+hero = NodePath("../World/Hero")
+world = NodePath("../World")
+
 [node name="Hud" type="CanvasLayer" parent="." unique_id=1613323869]
 
 [node name="FpsLabel" type="Label" parent="Hud" unique_id=124840403]
@@ -76,11 +83,14 @@ grow_horizontal = 0
 text = "FPS:"
 script = ExtResource("2_h2yge")
 
-[node name="DebugOverlay" type="CanvasLayer" parent="." unique_id=1270742065 node_paths=PackedStringArray("hero", "markers")]
+[node name="DebugOverlay" type="CanvasLayer" parent="." unique_id=1270742065 node_paths=PackedStringArray("hero", "markers", "hitboxes", "world")]
 layer = 2
 script = ExtResource("4_lquwl")
 hero = NodePath("../World/Hero")
 markers = NodePath("../DebugMarkers")
+hitboxes = NodePath("../DebugHitboxes")
+world = NodePath("../World")
+dummy_scene = ExtResource("3_272bh")
 
 [node name="Panel" type="PanelContainer" parent="DebugOverlay" unique_id=2044389230]
 offset_left = 16.0
@@ -110,6 +120,9 @@ layout_mode = 2
 layout_mode = 2
 
 [node name="TuningLine" type="Label" parent="DebugOverlay/Panel/Lines" unique_id=772443240]
+layout_mode = 2
+
+[node name="HitsLine" type="Label" parent="DebugOverlay/Panel/Lines" unique_id=1446999256]
 layout_mode = 2
 
 [node name="Message" type="Label" parent="DebugOverlay" unique_id=979635810]

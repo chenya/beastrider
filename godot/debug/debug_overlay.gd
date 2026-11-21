@@ -5,7 +5,9 @@ extends CanvasLayer
 ## and the [code]Tuning[/code] autoload; it never parses or checks the tuning file itself. Keys
 ## come from the Input Map actions [code]debug_toggle_overlay[/code] and
 ## [code]debug_reload_tuning[/code], never from key codes. The result of each reload appears in
-## the message spot, which is visible whether the panel is open or not.
+## the message spot, which is visible whether the panel is open or not. F2 shows the hitboxes and
+## F3 adds a training dummy (actions [code]debug_show_hitboxes[/code] and
+## [code]debug_spawn_dummy[/code]); the panel also counts hits landed.
 
 ## How long "Tuning reloaded" stays on screen, in seconds. Debug presentation, not tuning.
 const RELOADED_MESSAGE_SECONDS := 2.0
@@ -16,6 +18,12 @@ const RELOADED_MESSAGE := "Tuning reloaded"
 @export var hero: Hero
 ## The world markers shown and hidden with the panel. Set in the editor.
 @export var markers: Node2D
+## The hitbox drawing shown and hidden with F2. Set in the editor.
+@export var hitboxes: Node2D
+## The node F3 adds new training dummies to. Set in the editor.
+@export var world: Node2D
+## The training dummy scene F3 adds. Set in the editor.
+@export var dummy_scene: PackedScene
 
 # Clears the "Tuning reloaded" message after RELOADED_MESSAGE_SECONDS.
 var _message_timer := Timer.new()
@@ -27,6 +35,7 @@ var _message_timer := Timer.new()
 @onready var _horizontal_speed_line: Label = $Panel/Lines/HorizontalSpeedLine
 @onready var _vertical_speed_line: Label = $Panel/Lines/VerticalSpeedLine
 @onready var _tuning_line: Label = $Panel/Lines/TuningLine
+@onready var _hits_line: Label = $Panel/Lines/HitsLine
 @onready var _message: Label = $Message
 
 
@@ -34,9 +43,11 @@ func _ready() -> void:
 	# Debug tools exist only in debug builds; a release export plays without them (FR-013).
 	if not OS.is_debug_build():
 		markers.queue_free()
+		hitboxes.queue_free()
 		queue_free()
 		return
 	_set_shown(false)
+	hitboxes.visible = false
 	_message.text = ""
 	_message_timer.one_shot = true
 	_message_timer.timeout.connect(_clear_message)
@@ -62,6 +73,7 @@ func _process(_delta: float) -> void:
 		_tuning_line.text = "Tuning: ok"
 	else:
 		_tuning_line.text = "Tuning: rejected (%s)" % rejected_field
+	_hits_line.text = "Hits: %d" % hero.hits_landed()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -72,6 +84,21 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("debug_reload_tuning"):
 		Tuning.reload()
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("debug_show_hitboxes"):
+		hitboxes.visible = not hitboxes.visible
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("debug_spawn_dummy"):
+		_spawn_dummy()
+		get_viewport().set_input_as_handled()
+
+
+func _spawn_dummy() -> void:
+	var dummy: Node2D = dummy_scene.instantiate()
+	# The hero (in Rust) decides where; this only places it.
+	dummy.position = hero.dummy_spawn_point()
+	world.add_child(dummy)
+	# Keep the hero the last child of the Y-sorted world, so it still wins depth ties.
+	world.move_child(dummy, hero.get_index())
 
 
 func _set_shown(shown: bool) -> void:
