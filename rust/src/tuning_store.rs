@@ -100,6 +100,24 @@ impl TuningStore {
         self.values.map_or(0.0, |v| v.lane_bottom())
     }
 
+    /// How long a hit dummy flashes white, in seconds, or `0.0` without values (no flash).
+    #[func]
+    pub fn flash_time(&self) -> f32 {
+        self.values.map_or(0.0, |v| v.impact().flash_time())
+    }
+
+    /// How far the screen shakes at most on impact, in pixels, or `0.0` without values.
+    #[func]
+    pub fn shake_strength(&self) -> f32 {
+        self.values.map_or(0.0, |v| v.impact().shake_strength())
+    }
+
+    /// How long the screen shakes on impact, in seconds, or `0.0` without values.
+    #[func]
+    pub fn shake_time(&self) -> f32 {
+        self.values.map_or(0.0, |v| v.impact().shake_time())
+    }
+
     /// Where the last load or reload failed (a field path or the file path), or `""` if it
     /// succeeded. Lets the overlay show a start-up error it was not around to hear.
     #[func]

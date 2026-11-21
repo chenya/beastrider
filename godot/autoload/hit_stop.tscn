@@ -1,0 +1,3 @@
+[gd_scene format=3]
+
+[node name="HitStop" type="HitStopTimer" unique_id=1032676075]

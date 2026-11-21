@@ -6,5 +6,25 @@
   "lane": {
     "top": 430,
     "bottom": 700
+  },
+  "attack": {
+    "wind_up_time": 0.08,
+    "active_time": 0.1,
+    "recovery_time": 0.18,
+    "reach": 70,
+    "height": 60,
+    "depth_tolerance": 20
+  },
+  "impact": {
+    "hit_stop_time": 0.06,
+    "flash_time": 0.08,
+    "shake_strength": 6,
+    "shake_time": 0.15,
+    "knockback_distance": 60,
+    "knockback_time": 0.2
+  },
+  "dummy": {
+    "hurtbox_width": 56,
+    "hurtbox_height": 120
   }
 }
