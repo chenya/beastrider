@@ -1,20 +1,26 @@
-//! The player-controlled hero: walks the lane and swings at whatever it can hit.
+//! The player-controlled hero: walks the lane, swings at enemies, and can be hurt and fall.
 //!
-//! Rust owns the hero's position, facing, swing and hits; the scene only sets where it starts and
-//! what it looks like. Tuning values are read from the `Tuning` autoload, never kept beyond one
-//! swing, so a reload reaches the hero on its next tick or next swing. Nothing here assumes a
-//! single player: every input action is built from `player_index` (constitution, Principle VII).
+//! Rust owns the hero's position, facing, swing, health, stun, invulnerability and knockback; the
+//! scene only sets where it starts and what it looks like. Tuning values are read from the `Tuning`
+//! autoload when used, never kept beyond one swing, so a reload reaches the hero on its next tick
+//! or next swing. Nothing here assumes a single player: every input action is built from
+//! `player_index`, and grunts reach heroes through the players' group (constitution, Principle
+//! VII).
 
 use godot::classes::{INode2D, Input, InputMap, Node2D, Polygon2D};
 use godot::prelude::*;
 
-use crate::combat::{
-    self, Facing, HITTABLE_GROUP, SwingPhase, SwingStep, SwingTimings, attack_box, new_hits,
+use crate::combat::{self, Facing};
+use crate::fighter::{
+    AttackAdvance, AttackPhase, AttackSpec, AttackStep, AttackTimer, Attacker, Countdown, Damage,
+    Health, Hit, Knockback, Target, Team, resolve_attack,
 };
+use crate::fighters::FighterRef;
 use crate::hit_stop::HitStopTimer;
 use crate::movement::{self, Limits, Speeds};
+use crate::run::RunTracker;
 use crate::training_dummy::{TrainingDummy, to_rect2};
-use crate::tuning::{AttackTuning, TuningValues};
+use crate::tuning::TuningValues;
 use crate::tuning_store::TuningStore;
 
 /// Name of the child node whose polygon defines the hero's width (built in the editor).
@@ -26,7 +32,10 @@ const TUNING_PATH: &str = "/root/Tuning";
 /// Where the `HitStop` autoload lives in the scene tree.
 const HIT_STOP_PATH: &str = "/root/HitStop";
 
-/// A character walked around the lane by one player, who can swing at targets in front of it.
+/// Where the `Run` autoload lives in the scene tree.
+const RUN_PATH: &str = "/root/Run";
+
+/// A character walked around the lane by one player, who can swing at enemies in front of it.
 ///
 /// The origin is at the hero's feet, so Godot's Y-sort draws it in front of anything whose base
 /// is higher on the screen. If its input actions, `Body` child or the autoloads are unusable, it
@@ -43,8 +52,15 @@ pub struct Hero {
     setup: Option<Setup>,
     /// The way the hero faces: the way it last moved horizontally.
     facing: Facing,
-    /// What the hero is doing: free to move, or swinging.
+    /// What the hero is doing.
     mode: HeroMode,
+    /// Health points; `None` until the first tick with tuning, which starts it full.
+    health: Option<Health>,
+    /// Runs after a blow lands; blows cannot land while it does. Beside the mode, because the
+    /// hero walks and swings while blinking.
+    invulnerable: Countdown,
+    /// The slide from the last blow taken, if it is still under way; runs in every mode.
+    knockback: Option<Knockback>,
     /// Targets hit since the game started, one per target per swing.
     hits_landed: i64,
     base: Base<Node2D>,
@@ -56,29 +72,30 @@ enum HeroMode {
     Free,
     /// Swinging; the hero neither moves nor turns.
     Attacking(Swing),
+    /// Stunned by a blow: no moving or attacking until the countdown runs out.
+    HitStun(Countdown),
+    /// Fallen. Stays so until the restart reloads the scene.
+    Dead,
 }
 
 /// One swing under way.
 struct Swing {
-    /// Which part of the swing it is in.
-    phase: SwingPhase,
-    /// Seconds spent in that part.
-    elapsed: f32,
-    /// The attack values when the swing started, so a reload applies from the next swing.
-    attack: AttackTuning,
+    /// The attack's part, time and values (copied at the start, so a reload applies next swing).
+    timer: AttackTimer,
+    /// Whether attack was pressed during recovery, to swing again the moment this one ends.
+    queued: bool,
     /// Targets this swing has hit, so each is hit at most once per swing.
     hit_this_swing: Vec<InstanceId>,
 }
 
-impl HeroMode {
-    /// A new swing with the current attack values.
-    fn new_swing(attack: AttackTuning) -> Self {
-        Self::Attacking(Swing {
-            phase: SwingPhase::WindUp,
-            elapsed: 0.0,
-            attack,
+impl Swing {
+    /// A new swing with `spec`.
+    fn new(spec: AttackSpec) -> Self {
+        Self {
+            timer: AttackTimer::new(spec),
+            queued: false,
             hit_this_swing: Vec::new(),
-        })
+        }
     }
 }
 
@@ -91,6 +108,8 @@ struct Setup {
     tuning: Gd<TuningStore>,
     /// The shared impact freeze.
     hit_stop: Gd<HitStopTimer>,
+    /// The run, told when the hero falls.
+    run: Gd<RunTracker>,
 }
 
 /// One player's input actions, built once so no action name is typed elsewhere.
@@ -130,13 +149,16 @@ impl PlayerActions {
 impl INode2D for Hero {
     fn init(base: Base<Node2D>) -> Self {
         // Player 1 is the default controller for a hero placed in the editor; the scene can
-        // change it. A hero starts free, facing right, with no hits. `setup` is filled by
-        // `ready()`.
+        // change it. A hero starts free, facing right, with no hits; health is filled on the
+        // first tick with tuning, and `setup` by `ready()`.
         Self {
             player_index: 1,
             setup: None,
             facing: Facing::Right,
             mode: HeroMode::Free,
+            health: None,
+            invulnerable: Countdown::default(),
+            knockback: None,
             hits_landed: 0,
             base,
         }
@@ -144,7 +166,10 @@ impl INode2D for Hero {
 
     fn ready(&mut self) {
         match self.set_up() {
-            Ok(setup) => self.setup = Some(setup),
+            Ok(setup) => {
+                self.setup = Some(setup);
+                self.base_mut().add_to_group(Team::Players.group());
+            }
             Err(message) => {
                 godot_error!("Hero: {message}");
             }
@@ -161,40 +186,115 @@ impl INode2D for Hero {
         let Some(values) = setup.tuning.bind().values() else {
             return;
         };
-        let attack_pressed = Input::singleton().is_action_just_pressed(&setup.actions.attack);
+        let playing = setup.run.bind().is_playing();
+        let attack_pressed =
+            playing && Input::singleton().is_action_just_pressed(&setup.actions.attack);
+        let delta = delta as f32;
+        let max_health = values.hero().max_health();
+        match &mut self.health {
+            Some(health) => health.set_max(max_health),
+            None => self.health = Some(Health::new(max_health)),
+        }
+        self.invulnerable.tick(delta);
+        self.slide(&values, delta);
         let mode = std::mem::replace(&mut self.mode, HeroMode::Free);
         self.mode = match mode {
-            HeroMode::Free if attack_pressed => HeroMode::new_swing(values.attack()),
+            HeroMode::Free if attack_pressed => HeroMode::Attacking(self.new_swing(&values)),
             HeroMode::Free => {
-                self.walk(&values, delta as f32);
+                if playing {
+                    self.walk(&values, delta);
+                }
                 HeroMode::Free
             }
-            HeroMode::Attacking(swing) => self.swing(swing, attack_pressed, &values, delta as f32),
+            HeroMode::Attacking(swing) => self.swing(swing, attack_pressed, &values, delta),
+            HeroMode::HitStun(mut stun) => {
+                if stun.tick(delta) {
+                    HeroMode::Free
+                } else {
+                    HeroMode::HitStun(stun)
+                }
+            }
+            HeroMode::Dead => HeroMode::Dead,
         };
     }
 }
 
 #[godot_api]
 impl Hero {
+    /// Emitted when a blow lands on the hero. `direction` is the push (−1 left, 1 right);
+    /// `strength` is the knockback distance in pixels. Handlers must not call back into the hero.
+    #[signal]
+    fn was_hit(direction: f32, strength: f32);
+
+    /// Emitted once, when the hero's health reaches zero and it falls. Handlers must not call back
+    /// into the hero.
+    #[signal]
+    fn died();
+
     /// Targets hit since the game started, one per target per swing. Shown by the debug overlay.
     #[func]
     pub fn hits_landed(&self) -> i64 {
         self.hits_landed
     }
 
+    /// Health points left, for the health bar; `0.0` before the first tick with tuning.
+    #[func]
+    pub fn health(&self) -> f32 {
+        self.health.map_or(0.0, |h| h.current())
+    }
+
+    /// Health points when full, for the health bar; `0.0` before the first tick with tuning.
+    #[func]
+    pub fn max_health(&self) -> f32 {
+        self.health.map_or(0.0, |h| h.max())
+    }
+
+    /// Whether blows cannot land on the hero right now (just after being hit); drives the blink.
+    #[func]
+    pub fn is_invulnerable(&self) -> bool {
+        self.invulnerable.is_running()
+    }
+
+    /// Whether the hero has fallen.
+    #[func]
+    pub fn is_dead(&self) -> bool {
+        match self.mode {
+            HeroMode::Dead => true,
+            HeroMode::Free | HeroMode::Attacking(_) | HeroMode::HitStun(_) => false,
+        }
+    }
+
+    /// Back to full health (the F4 cheat). Does nothing once the hero has fallen.
+    #[func]
+    pub fn refill_health(&mut self) {
+        if self.is_dead() {
+            return;
+        }
+        if let Some(health) = &mut self.health {
+            health.refill();
+        }
+    }
+
+    /// The hero's hurtbox in screen pixels, from `hero.hurtbox_width` and `hurtbox_height`; an empty
+    /// rectangle while there is no tuning. For the debug hitbox drawing.
+    #[func]
+    pub fn hurtbox(&self) -> Rect2 {
+        self.hurtbox_rect()
+            .map_or_else(Rect2::default, |hurt| to_rect2(&hurt))
+    }
+
     /// The area the swing can land in, in screen pixels, while it is in its active part; an empty
     /// rectangle otherwise. For the debug hitbox drawing only.
     #[func]
     pub fn attack_box(&self) -> Rect2 {
-        let Some(setup) = &self.setup else {
-            return Rect2::default();
-        };
         match &self.mode {
-            HeroMode::Attacking(swing) => match swing.phase {
-                SwingPhase::Active => to_rect2(&self.reach_box(setup.half_width, &swing.attack)),
-                SwingPhase::WindUp | SwingPhase::Recovery { .. } => Rect2::default(),
+            HeroMode::Attacking(swing) => match swing.timer.phase() {
+                AttackPhase::Active => self
+                    .attacker(&swing.timer.spec(), 0.0)
+                    .map_or_else(Rect2::default, |a| to_rect2(&a.attack_box())),
+                AttackPhase::WindUp | AttackPhase::Recovery => Rect2::default(),
             },
-            HeroMode::Free => Rect2::default(),
+            HeroMode::Free | HeroMode::HitStun(_) | HeroMode::Dead => Rect2::default(),
         }
     }
 
@@ -219,7 +319,7 @@ impl Hero {
             (position.x, position.y),
             self.facing,
             setup.half_width,
-            values.attack().reach(),
+            values.hero().attack().reach(),
             values.dummy().hurtbox_width(),
             &others_x,
             self.base().get_viewport_rect().size.x,
@@ -229,6 +329,60 @@ impl Hero {
 }
 
 impl Hero {
+    /// How the hit rule sees the hero, or `None` while there is no tuning.
+    pub fn target(&self) -> Option<Target<InstanceId>> {
+        Some(Target {
+            id: self.base().instance_id(),
+            team: Team::Players,
+            hurtbox: self.hurtbox_rect()?,
+            feet_y: self.base().get_position().y,
+            alive: !self.is_dead(),
+            invulnerable: self.invulnerable.is_running(),
+        })
+    }
+
+    /// Takes a blow from an enemy, unless fallen or invulnerable: health drops, the knockback
+    /// starts and `was_hit` is emitted; a surviving hero is stunned (any swing is cancelled) and
+    /// becomes invulnerable for a while; a killed hero falls and the run ends.
+    pub fn take_hit(&mut self, hit: &Hit<InstanceId>) {
+        if self.is_dead() || self.invulnerable.is_running() {
+            return;
+        }
+        let Some(setup) = &self.setup else {
+            return;
+        };
+        let Some(values) = setup.tuning.bind().values() else {
+            return;
+        };
+        let mut run = setup.run.clone();
+        let Some(health) = &mut self.health else {
+            return;
+        };
+        let damage = health.damage(hit.damage);
+        let start_x = self.base().get_position().x;
+        self.knockback = Knockback::start(start_x, hit.direction, hit.knockback);
+        self.signals()
+            .was_hit()
+            .emit(hit.direction, hit.knockback.distance);
+        match damage {
+            Damage::Survived => {
+                self.mode = HeroMode::HitStun(Countdown::new(values.hero().hit_stun_time()));
+                self.invulnerable = Countdown::new(values.invulnerability_time());
+            }
+            Damage::Killed => {
+                self.mode = HeroMode::Dead;
+                self.signals().died().emit();
+                run.bind_mut().end_run();
+            }
+            Damage::AlreadyDead => {}
+        }
+    }
+
+    /// A new swing with the current attack values.
+    fn new_swing(&self, values: &TuningValues) -> Swing {
+        Swing::new(AttackSpec::from_tuning(&values.hero().attack()))
+    }
+
     /// Walks one tick, as in M1, and turns towards any horizontal input.
     fn walk(&mut self, values: &TuningValues, delta: f32) {
         let Some(setup) = &self.setup else {
@@ -241,9 +395,10 @@ impl Hero {
             &actions.up,
             &actions.down,
         );
+        let hero = values.hero();
         let speeds = Speeds {
-            horizontal: values.horizontal_speed(),
-            vertical: values.vertical_speed(),
+            horizontal: hero.horizontal_speed(),
+            vertical: hero.vertical_speed(),
         };
         let screen_width = self.base().get_viewport_rect().size.x;
         let limits = Limits {
@@ -264,116 +419,124 @@ impl Hero {
         self.base_mut().set_position(Vector2::new(x, y));
     }
 
+    /// Moves any knockback slide on by one tick, keeping the hero inside the lane and the screen.
+    fn slide(&mut self, values: &TuningValues, delta: f32) {
+        let Some(half_width) = self.setup.as_ref().map(|s| s.half_width) else {
+            return;
+        };
+        let Some(mut knockback) = self.knockback else {
+            return;
+        };
+        let mut position = self.base().get_position();
+        position.x = knockback.advance(delta);
+        let screen_width = self.base().get_viewport_rect().size.x;
+        let (x, y) = combat::clamp_to_area(
+            (position.x, position.y),
+            half_width,
+            screen_width,
+            values.lane_top(),
+            values.lane_bottom(),
+        );
+        let stopped_at_limit = x != position.x;
+        self.knockback = (!knockback.is_done() && !stopped_at_limit).then_some(knockback);
+        self.base_mut().set_position(Vector2::new(x, y));
+    }
+
     /// Moves a swing on by one tick: remembers a press made in recovery, lands the blow on any
     /// new target while the swing is active, and says what the hero does next.
     fn swing(
         &mut self,
-        swing: Swing,
+        mut swing: Swing,
         attack_pressed: bool,
         values: &TuningValues,
         delta: f32,
     ) -> HeroMode {
-        let Swing {
-            phase,
-            elapsed,
-            attack,
-            mut hit_this_swing,
-        } = swing;
-        let phase = match phase {
-            SwingPhase::Recovery { .. } if attack_pressed => SwingPhase::Recovery { queued: true },
-            SwingPhase::WindUp | SwingPhase::Active | SwingPhase::Recovery { .. } => phase,
-        };
-        let timings = SwingTimings {
-            wind_up: attack.wind_up_time(),
-            active: attack.active_time(),
-            recovery: attack.recovery_time(),
-        };
-        let advance = combat::advance_swing(phase, elapsed, delta, timings);
-        if advance.was_active {
-            self.land_blow(&attack, values, &mut hit_this_swing);
+        if attack_pressed {
+            match swing.timer.phase() {
+                AttackPhase::Recovery => swing.queued = true,
+                AttackPhase::WindUp | AttackPhase::Active => {}
+            }
         }
-        match advance.step {
-            SwingStep::Continue => HeroMode::Attacking(Swing {
-                phase: advance.phase,
-                elapsed: advance.elapsed,
-                attack,
-                hit_this_swing,
-            }),
-            SwingStep::Finished => HeroMode::Free,
-            SwingStep::Restart => HeroMode::new_swing(values.attack()),
+        let AttackAdvance { step, was_active } = swing.timer.advance(delta);
+        if was_active {
+            self.land_blow(&swing.timer.spec(), values, &mut swing.hit_this_swing);
+        }
+        match step {
+            AttackStep::Continue => HeroMode::Attacking(swing),
+            AttackStep::Finished if swing.queued => HeroMode::Attacking(self.new_swing(values)),
+            AttackStep::Finished => HeroMode::Free,
         }
     }
 
-    /// Hits every target the active swing reaches that it has not hit yet: each takes the hit,
+    /// Hits every enemy the active swing reaches that it has not hit yet: each takes the hit,
     /// the counter goes up, and play freezes once for the swing, however many targets it hits.
     fn land_blow(
         &mut self,
-        attack: &AttackTuning,
+        spec: &AttackSpec,
         values: &TuningValues,
         hit_this_swing: &mut Vec<InstanceId>,
     ) {
-        let Some(setup) = &self.setup else {
+        let Some(attacker) = self.attacker(spec, values.depth_tolerance()) else {
             return;
         };
-        let feet_y = self.base().get_position().y;
-        let reach = self.reach_box(setup.half_width, attack);
-        let dummies = self.dummies();
-        let targets: Vec<(InstanceId, combat::Rect, f32)> = dummies
-            .iter()
-            .filter_map(|dummy| {
-                let hurt = dummy.bind().hurtbox_rect()?;
-                Some((dummy.instance_id(), hurt, dummy.get_position().y))
-            })
-            .collect();
-        let hits = new_hits(
-            &reach,
-            feet_y,
-            attack.depth_tolerance(),
-            &targets,
-            hit_this_swing,
-        );
+        let mut enemies = FighterRef::in_team(&self.base().get_tree(), Team::Enemies);
+        let targets: Vec<Target<InstanceId>> =
+            enemies.iter().filter_map(FighterRef::target).collect();
+        let hits = resolve_attack(&attacker, &targets, hit_this_swing);
         if hits.is_empty() {
             return;
         }
-        let direction = self.facing.sign();
-        let mut hit_stop = setup.hit_stop.clone();
-        for mut dummy in dummies
-            .into_iter()
-            .filter(|dummy| hits.contains(&dummy.instance_id()))
-        {
-            dummy.bind_mut().take_hit(direction);
+        for hit in &hits {
+            if let Some(enemy) = enemies.iter_mut().find(|e| e.id() == hit.target) {
+                enemy.take_hit(hit);
+            }
         }
-        hit_this_swing.extend(hits.iter().copied());
+        hit_this_swing.extend(hits.iter().map(|hit| hit.target));
         self.hits_landed += hits.len() as i64;
-        let freeze = values.impact().hit_stop_time();
-        if freeze > 0.0 {
-            hit_stop.bind_mut().freeze(freeze);
+        let freeze = values.effects().hit_stop_time();
+        if freeze > 0.0
+            && let Some(setup) = &self.setup
+        {
+            setup.hit_stop.clone().bind_mut().freeze(freeze);
         }
     }
 
-    /// The swing's reach as a box, from the hero's current position and facing.
-    fn reach_box(&self, half_width: f32, attack: &AttackTuning) -> combat::Rect {
+    /// The hero as an attacker with `spec`, from its current position and facing.
+    fn attacker(&self, spec: &AttackSpec, depth_tolerance: f32) -> Option<Attacker> {
         let position = self.base().get_position();
-        attack_box(
-            (position.x, position.y),
-            self.facing,
-            half_width,
-            attack.reach(),
-            attack.height(),
-        )
+        Some(Attacker {
+            team: Team::Players,
+            origin: (position.x, position.y),
+            facing: self.facing,
+            half_width: self.setup.as_ref()?.half_width,
+            spec: *spec,
+            depth_tolerance,
+        })
     }
 
-    /// Every training dummy in the hittable group.
+    /// The hurtbox in screen pixels, or `None` while there is no tuning.
+    fn hurtbox_rect(&self) -> Option<combat::Rect> {
+        let values = self.setup.as_ref()?.tuning.bind().values()?;
+        let position = self.base().get_position();
+        Some(combat::hurtbox(
+            (position.x, position.y),
+            values.hero().hurtbox_width(),
+            values.hero().hurtbox_height(),
+        ))
+    }
+
+    /// Every training dummy among the enemies.
     fn dummies(&self) -> Vec<Gd<TrainingDummy>> {
-        self.base()
-            .get_tree()
-            .get_nodes_in_group(HITTABLE_GROUP)
-            .iter_shared()
-            .filter_map(|node| node.try_cast::<TrainingDummy>().ok())
+        FighterRef::in_team(&self.base().get_tree(), Team::Enemies)
+            .into_iter()
+            .filter_map(|fighter| match fighter {
+                FighterRef::Dummy(dummy) => Some(dummy),
+                FighterRef::Hero(_) | FighterRef::Grunt(_) => None,
+            })
             .collect()
     }
 
-    /// Checks the player index, input actions, `Body` and the two autoloads, in that order, and
+    /// Checks the player index, input actions, `Body` and the three autoloads, in that order, and
     /// returns a ready-to-print message for the first problem. Tuning values are not checked
     /// here: they are read when needed, so a later reload can still fix them.
     fn set_up(&self) -> Result<Setup, String> {
@@ -395,11 +558,16 @@ impl Hero {
             .ok_or_else(|| {
                 "the HitStop autoload is missing or is not a HitStopTimer".to_string()
             })?;
+        let run = self
+            .base()
+            .try_get_node_as::<RunTracker>(RUN_PATH)
+            .ok_or_else(|| "the Run autoload is missing or is not a RunTracker".to_string())?;
         Ok(Setup {
             actions,
             half_width,
             tuning,
             hit_stop,
+            run,
         })
     }
 
