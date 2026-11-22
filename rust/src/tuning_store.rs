@@ -7,7 +7,7 @@
 use godot::classes::{INode, Node};
 use godot::prelude::*;
 
-use crate::tuning::{self, TuningError, TuningValues};
+use crate::tuning::{self, TuningError, TuningValues, TuningWarning};
 
 /// Loads, checks and holds the current tuning values; registered as the autoload `Tuning`.
 ///
@@ -23,6 +23,8 @@ pub struct TuningStore {
     values: Option<TuningValues>,
     /// Why the last load or reload was rejected; `None` after a success.
     rejection: Option<TuningError>,
+    /// What the last successful load or reload warned about; empty when nothing did.
+    warnings: Vec<TuningWarning>,
     base: Base<Node>,
 }
 
@@ -33,6 +35,7 @@ impl INode for TuningStore {
         Self {
             values: None,
             rejection: None,
+            warnings: Vec::new(),
             base,
         }
     }
@@ -79,13 +82,13 @@ impl TuningStore {
     /// The hero's speed along the lane in pixels per second, or `0.0` without values.
     #[func]
     pub fn horizontal_speed(&self) -> f32 {
-        self.values.map_or(0.0, |v| v.horizontal_speed())
+        self.values.map_or(0.0, |v| v.hero().horizontal_speed())
     }
 
     /// The hero's speed into and out of the lane in pixels per second, or `0.0` without values.
     #[func]
     pub fn vertical_speed(&self) -> f32 {
-        self.values.map_or(0.0, |v| v.vertical_speed())
+        self.values.map_or(0.0, |v| v.hero().vertical_speed())
     }
 
     /// The highest y a character's feet may reach, in pixels, or `0.0` without values.
@@ -100,22 +103,37 @@ impl TuningStore {
         self.values.map_or(0.0, |v| v.lane_bottom())
     }
 
-    /// How long a hit dummy flashes white, in seconds, or `0.0` without values (no flash).
+    /// How long the one hit flashes white, in seconds, or `0.0` without values (no flash).
     #[func]
     pub fn flash_time(&self) -> f32 {
-        self.values.map_or(0.0, |v| v.impact().flash_time())
+        self.values.map_or(0.0, |v| v.effects().flash_time())
     }
 
     /// How far the screen shakes at most on impact, in pixels, or `0.0` without values.
     #[func]
     pub fn shake_strength(&self) -> f32 {
-        self.values.map_or(0.0, |v| v.impact().shake_strength())
+        self.values.map_or(0.0, |v| v.effects().shake_strength())
     }
 
     /// How long the screen shakes on impact, in seconds, or `0.0` without values.
     #[func]
     pub fn shake_time(&self) -> f32 {
-        self.values.map_or(0.0, |v| v.impact().shake_time())
+        self.values.map_or(0.0, |v| v.effects().shake_time())
+    }
+
+    /// How long a dying grunt takes to fade out, in seconds, or `0.0` without values.
+    #[func]
+    pub fn death_fade_time(&self) -> f32 {
+        self.values.map_or(0.0, |v| v.run().death_fade_time())
+    }
+
+    /// The warning of the last successful load or reload, or `""` when there is none. The values
+    /// are in use either way; a warning only flags a combination that is probably a slip.
+    #[func]
+    pub fn warning(&self) -> GString {
+        self.warnings
+            .first()
+            .map_or_else(GString::new, |w| GString::from(&w.to_string()))
     }
 
     /// Where the last load or reload failed (a field path or the file path), or `""` if it
@@ -153,6 +171,10 @@ impl TuningStore {
             tuning::read_raw_tuning().and_then(|raw| tuning::validate(&raw, screen_height));
         match result {
             Ok(values) => {
+                self.warnings = tuning::warnings(&values);
+                for warning in &self.warnings {
+                    godot_warn!("Tuning: {warning}");
+                }
                 self.values = Some(values);
                 self.rejection = None;
                 Ok(())

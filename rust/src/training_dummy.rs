@@ -2,12 +2,14 @@
 //!
 //! Rust owns its knockback slide and keeps it inside the lane and the screen; the scene only sets
 //! where it starts and what it looks like. Presentation (the white flash, the screen shake) reacts
-//! to its `was_hit` signal without the dummy knowing about it.
+//! to its `was_hit` signal without the dummy knowing about it. It is on the enemies' team with no
+//! health: the hero can hit it, grunts ignore it, and it never dies or counts as a kill.
 
 use godot::classes::{INode2D, Node2D};
 use godot::prelude::*;
 
-use crate::combat::{self, HITTABLE_GROUP};
+use crate::combat;
+use crate::fighter::{Hit, Knockback, Target, Team};
 use crate::hit_stop::HitStopTimer;
 use crate::tuning_store::TuningStore;
 
@@ -19,7 +21,7 @@ const HIT_STOP_PATH: &str = "/root/HitStop";
 
 /// A target standing in the lane, origin at its feet so Y-sort draws it by depth.
 ///
-/// It joins the `hittable` group in `ready()`, so a swing finds it however it was added. If the
+/// It joins the enemies' group in `ready()`, so a swing finds it however it was added. If the
 /// `Tuning` or `HitStop` autoload is missing, it reports one error and never moves.
 #[derive(GodotClass)]
 #[class(base = Node2D)]
@@ -27,7 +29,7 @@ pub struct TrainingDummy {
     /// The autoloads it reads every tick; `None` until `ready()` finds them, and for good if not.
     links: Option<Links>,
     /// The knockback slide under way, if any.
-    slide: Option<Slide>,
+    slide: Option<Knockback>,
     base: Base<Node2D>,
 }
 
@@ -35,16 +37,6 @@ pub struct TrainingDummy {
 struct Links {
     tuning: Gd<TuningStore>,
     hit_stop: Gd<HitStopTimer>,
-}
-
-/// A knockback slide: it covers `distance` in `time` from `start_x`, in `direction` (−1 or 1).
-#[derive(Debug, Clone, Copy)]
-struct Slide {
-    start_x: f32,
-    direction: f32,
-    distance: f32,
-    time: f32,
-    elapsed: f32,
 }
 
 #[godot_api]
@@ -59,7 +51,7 @@ impl INode2D for TrainingDummy {
     }
 
     fn ready(&mut self) {
-        self.base_mut().add_to_group(HITTABLE_GROUP);
+        self.base_mut().add_to_group(Team::Enemies.group());
         let tuning = self.base().try_get_node_as::<TuningStore>(TUNING_PATH);
         let hit_stop = self.base().try_get_node_as::<HitStopTimer>(HIT_STOP_PATH);
         match (tuning, hit_stop) {
@@ -85,9 +77,7 @@ impl INode2D for TrainingDummy {
         let mut position = self.base().get_position();
         let mut slide = self.slide;
         if let Some(active) = &mut slide {
-            active.elapsed += delta as f32;
-            let offset = combat::knockback_offset(active.distance, active.time, active.elapsed);
-            position.x = active.start_x + active.direction * offset;
+            position.x = active.advance(delta as f32);
         }
         // Clamp every tick, sliding or not, so a lane changed by a reload still holds the dummy.
         let half_width = values.dummy().hurtbox_width() / 2.0;
@@ -100,7 +90,7 @@ impl INode2D for TrainingDummy {
             values.lane_bottom(),
         );
         let stopped_at_limit = x != position.x;
-        self.slide = slide.filter(|s| s.elapsed < s.time && !stopped_at_limit);
+        self.slide = slide.filter(|s| !s.is_done() && !stopped_at_limit);
         self.base_mut().set_position(Vector2::new(x, y));
     }
 }
@@ -108,7 +98,7 @@ impl INode2D for TrainingDummy {
 #[godot_api]
 impl TrainingDummy {
     /// Emitted at the moment of each hit. `direction` is the push direction (−1 left, 1 right);
-    /// `strength` is the knockback distance in pixels.
+    /// `strength` is the knockback distance in pixels (the attacker's).
     #[signal]
     fn was_hit(direction: f32, strength: f32);
 
@@ -122,24 +112,28 @@ impl TrainingDummy {
 }
 
 impl TrainingDummy {
-    /// Takes a hit pushing it in `direction` (−1 or 1): starts a new knockback slide from where it
-    /// stands, replacing any slide under way, and emits `was_hit`. The slide waits while play is
-    /// frozen, so it starts when the impact freeze ends.
-    pub fn take_hit(&mut self, direction: f32) {
-        let Some(values) = self.links.as_ref().and_then(|l| l.tuning.bind().values()) else {
-            return;
-        };
-        let impact = values.impact();
-        self.slide = (impact.knockback_distance() > 0.0).then(|| Slide {
-            start_x: self.base().get_position().x,
-            direction,
-            distance: impact.knockback_distance(),
-            time: impact.knockback_time(),
-            elapsed: 0.0,
-        });
+    /// Takes a blow: starts the attacker's knockback from where it stands, replacing any slide
+    /// under way, and emits `was_hit`. It has no health, so the damage is ignored. The slide waits
+    /// while play is frozen, so it starts when the impact freeze ends.
+    pub fn take_hit<T>(&mut self, hit: &Hit<T>) {
+        let start_x = self.base().get_position().x;
+        self.slide = Knockback::start(start_x, hit.direction, hit.knockback);
         self.signals()
             .was_hit()
-            .emit(direction, impact.knockback_distance());
+            .emit(hit.direction, hit.knockback.distance);
+    }
+
+    /// How the hit rule sees it: always alive and never invulnerable, since it cannot die. `None`
+    /// while there is no tuning.
+    pub fn target(&self) -> Option<Target<InstanceId>> {
+        Some(Target {
+            id: self.base().instance_id(),
+            team: Team::Enemies,
+            hurtbox: self.hurtbox_rect()?,
+            feet_y: self.base().get_position().y,
+            alive: true,
+            invulnerable: false,
+        })
     }
 
     /// The hurtbox in screen pixels, for hit checks, or `None` while there is no tuning.

@@ -5,8 +5,18 @@
 [ext_resource type="Script" path="res://debug/debug_markers.gd" id="2_1bvp3"]
 [ext_resource type="Script" path="res://ui/fps_label.gd" id="2_h2yge"]
 [ext_resource type="PackedScene" path="res://world/training_dummy.tscn" id="3_272bh"]
+[ext_resource type="Shader" path="res://world/flash.gdshader" id="3_ycdy4"]
 [ext_resource type="Script" path="res://debug/debug_overlay.gd" id="4_lquwl"]
+[ext_resource type="Script" path="res://world/hero_body.gd" id="4_w48qg"]
 [ext_resource type="Script" path="res://debug/debug_hitboxes.gd" id="5_272bh"]
+[ext_resource type="PackedScene" path="res://world/grunt.tscn" id="5_vivmo"]
+[ext_resource type="Script" path="res://ui/health_bar.gd" id="9_2cqfq"]
+[ext_resource type="Script" path="res://ui/kills_label.gd" id="10_yaehf"]
+[ext_resource type="Script" path="res://ui/game_over.gd" id="11_074og"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_cegan"]
+resource_local_to_scene = true
+shader = ExtResource("3_ycdy4")
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_7mycd"]
 content_margin_left = 8.0
@@ -48,15 +58,18 @@ position = Vector2(1000, 660)
 color = Color(0.41960785, 0.43529412, 0.5019608, 1)
 polygon = PackedVector2Array(-32, -260, 32, -260, 32, 0, -32, 0)
 
-[node name="Dummy" type="TrainingDummy" parent="World" unique_id=595331486 instance=ExtResource("3_272bh")]
-position = Vector2(760, 600)
-
 [node name="Hero" type="Hero" parent="World" unique_id=937234605]
 position = Vector2(460, 600)
 
 [node name="Body" type="Polygon2D" parent="World/Hero" unique_id=966950019]
+material = SubResource("ShaderMaterial_cegan")
 color = Color(0.9098039, 0.4745098, 0.16862746, 1)
 polygon = PackedVector2Array(-24, -96, 24, -96, 24, 0, -24, 0)
+script = ExtResource("4_w48qg")
+
+[node name="GruntSpawner" type="GruntSpawner" parent="." unique_id=395351920 node_paths=PackedStringArray("world")]
+grunt_scene = ExtResource("5_vivmo")
+world = NodePath("../World")
 
 [node name="DebugMarkers" type="Node2D" parent="." unique_id=1656156852 node_paths=PackedStringArray("hero")]
 z_index = 1
@@ -83,20 +96,67 @@ grow_horizontal = 0
 text = "FPS:"
 script = ExtResource("2_h2yge")
 
-[node name="DebugOverlay" type="CanvasLayer" parent="." unique_id=1270742065 node_paths=PackedStringArray("hero", "markers", "hitboxes", "world")]
+[node name="HealthBar" type="Control" parent="Hud" unique_id=1753360910 node_paths=PackedStringArray("hero")]
+layout_mode = 3
+anchors_preset = 0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 16.0
+offset_bottom = 16.0
+mouse_filter = 2
+script = ExtResource("9_2cqfq")
+hero = NodePath("../../World/Hero")
+
+[node name="KillsLabel" type="Label" parent="Hud" unique_id=966822071]
+offset_left = 16.0
+offset_top = 34.0
+offset_right = 16.0
+offset_bottom = 34.0
+text = "Kills: 0"
+script = ExtResource("10_yaehf")
+
+[node name="GameOver" type="CanvasLayer" parent="." unique_id=607060254]
 layer = 2
+script = ExtResource("11_074og")
+
+[node name="Box" type="VBoxContainer" parent="GameOver" unique_id=504277687]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="GameOver/Box" unique_id=1659417800]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+horizontal_alignment = 1
+
+[node name="Kills" type="Label" parent="GameOver/Box" unique_id=100920498]
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="Hint" type="Label" parent="GameOver/Box" unique_id=206734938]
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="DebugOverlay" type="CanvasLayer" parent="." unique_id=1270742065 node_paths=PackedStringArray("hero", "markers", "hitboxes", "world", "spawner")]
+layer = 3
 script = ExtResource("4_lquwl")
 hero = NodePath("../World/Hero")
 markers = NodePath("../DebugMarkers")
 hitboxes = NodePath("../DebugHitboxes")
 world = NodePath("../World")
 dummy_scene = ExtResource("3_272bh")
+spawner = NodePath("../GruntSpawner")
 
 [node name="Panel" type="PanelContainer" parent="DebugOverlay" unique_id=2044389230]
 offset_left = 16.0
-offset_top = 16.0
+offset_top = 64.0
 offset_right = 16.0
-offset_bottom = 16.0
+offset_bottom = 64.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_7mycd")
 

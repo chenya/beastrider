@@ -5,9 +5,11 @@ extends CanvasLayer
 ## and the [code]Tuning[/code] autoload; it never parses or checks the tuning file itself. Keys
 ## come from the Input Map actions [code]debug_toggle_overlay[/code] and
 ## [code]debug_reload_tuning[/code], never from key codes. The result of each reload appears in
-## the message spot, which is visible whether the panel is open or not. F2 shows the hitboxes and
-## F3 adds a training dummy (actions [code]debug_show_hitboxes[/code] and
-## [code]debug_spawn_dummy[/code]); the panel also counts hits landed.
+## the message spot, which is visible whether the panel is open or not, with any tuning warning
+## after it. F2 shows the hitboxes, F3 sends a grunt, F4 refills the hero's health and F6 adds a
+## training dummy (actions [code]debug_show_hitboxes[/code], [code]debug_spawn_grunt[/code],
+## [code]debug_refill_health[/code] and [code]debug_spawn_dummy[/code]); the panel also counts hits
+## landed.
 
 ## How long "Tuning reloaded" stays on screen, in seconds. Debug presentation, not tuning.
 const RELOADED_MESSAGE_SECONDS := 2.0
@@ -20,10 +22,12 @@ const RELOADED_MESSAGE := "Tuning reloaded"
 @export var markers: Node2D
 ## The hitbox drawing shown and hidden with F2. Set in the editor.
 @export var hitboxes: Node2D
-## The node F3 adds new training dummies to. Set in the editor.
+## The node F6 adds new training dummies to. Set in the editor.
 @export var world: Node2D
-## The training dummy scene F3 adds. Set in the editor.
+## The training dummy scene F6 adds. Set in the editor.
 @export var dummy_scene: PackedScene
+## The spawner F3 asks for a grunt. Set in the editor.
+@export var spawner: GruntSpawner
 
 # Clears the "Tuning reloaded" message after RELOADED_MESSAGE_SECONDS.
 var _message_timer := Timer.new()
@@ -58,6 +62,8 @@ func _ready() -> void:
 	var rejected_field: String = Tuning.rejected_field()
 	if not rejected_field.is_empty():
 		_on_tuning_rejected(rejected_field, Tuning.rejected_reason())
+	elif not Tuning.warning().is_empty():
+		_show_warning()
 
 
 func _process(_delta: float) -> void:
@@ -87,6 +93,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("debug_show_hitboxes"):
 		hitboxes.visible = not hitboxes.visible
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("debug_spawn_grunt"):
+		spawner.spawn_now()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("debug_refill_health"):
+		hero.refill_health()
+		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("debug_spawn_dummy"):
 		_spawn_dummy()
 		get_viewport().set_input_as_handled()
@@ -107,8 +119,17 @@ func _set_shown(shown: bool) -> void:
 
 
 func _on_tuning_reloaded() -> void:
+	if not Tuning.warning().is_empty():
+		_show_warning()
+		return
 	_message.text = RELOADED_MESSAGE
 	_message_timer.start(RELOADED_MESSAGE_SECONDS)
+
+
+func _show_warning() -> void:
+	# A warning stays until the next reload, like a rejection, so it cannot be missed.
+	_message_timer.stop()
+	_message.text = "%s (warning: %s)" % [RELOADED_MESSAGE, Tuning.warning()]
 
 
 func _on_tuning_rejected(field: String, reason: String) -> void:

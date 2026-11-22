@@ -42,10 +42,16 @@ impl INode for HitStopTimer {
 #[godot_api]
 impl HitStopTimer {
     /// Freezes play for at least `seconds`: the longer of the time left and `seconds`, never the
-    /// sum. `0` does nothing, which is how a zero `impact.hit_stop_time` turns the freeze off.
+    /// sum. `0` does nothing, which is how a zero `effects.hit_stop_time` turns the freeze off.
     #[func]
     pub fn freeze(&mut self, seconds: f32) {
         self.remaining = combat::extend_freeze(self.remaining, seconds);
+    }
+
+    /// Ends any freeze at once. A restart calls it, so a fresh run never starts frozen.
+    #[func]
+    pub fn clear(&mut self) {
+        self.remaining = 0.0;
     }
 
     /// Whether play is frozen; fighters skip their gameplay step while it is.

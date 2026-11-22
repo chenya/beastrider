@@ -1,9 +1,14 @@
 //! Beastrider's game rules and state, exposed to Godot as a GDExtension library.
 
 mod combat;
+mod fighter;
+mod fighters;
+mod grunt;
+mod grunt_spawner;
 mod hero;
 mod hit_stop;
 mod movement;
+mod run;
 mod training_dummy;
 mod tuning;
 mod tuning_store;

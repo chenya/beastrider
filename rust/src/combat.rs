@@ -1,13 +1,10 @@
-//! The rules of a swing landing on a target, as plain functions with no Godot types.
+//! The geometry of a blow landing on a target, as plain functions with no Godot types.
 //!
 //! Hits on a lane are judged by two things: the attack box overlapping the target's hurtbox
 //! horizontally, and the two fighters' feet being at about the same depth. Box height plays no part
 //! in that (two fighters at the same depth always overlap vertically); it is kept only so the
 //! debug overlay can draw the boxes. Everything here is unit-tested without the engine, like
-//! `movement::step`.
-
-/// The Godot group every node a swing can hit joins, so new targets need no extra wiring.
-pub const HITTABLE_GROUP: &str = "hittable";
+//! `movement::step`. Attack timing, teams and the full hit rule live in `fighter`.
 
 /// Which way a fighter faces along the lane.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,105 +33,6 @@ impl Facing {
             Self::Right
         } else {
             self
-        }
-    }
-}
-
-/// The three timed parts of a swing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SwingPhase {
-    /// Before the blow can land.
-    WindUp,
-    /// The blow can land.
-    Active,
-    /// After the blow; `queued` remembers one attack press made now, to swing again at once.
-    Recovery {
-        /// Whether an attack press arrived during this recovery.
-        queued: bool,
-    },
-}
-
-/// How long each part of a swing lasts, in seconds.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SwingTimings {
-    /// Length of [`SwingPhase::WindUp`]; may be 0.
-    pub wind_up: f32,
-    /// Length of [`SwingPhase::Active`]; above 0.
-    pub active: f32,
-    /// Length of [`SwingPhase::Recovery`]; may be 0.
-    pub recovery: f32,
-}
-
-/// What a swing does after a tick.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SwingStep {
-    /// The swing goes on.
-    Continue,
-    /// The swing ended; the fighter is free.
-    Finished,
-    /// The swing ended with a press queued in recovery; a new swing starts now.
-    Restart,
-}
-
-/// The result of [`advance_swing`].
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SwingAdvance {
-    /// The part the swing is in after the tick.
-    pub phase: SwingPhase,
-    /// Seconds spent in that part so far.
-    pub elapsed: f32,
-    /// Whether the swing goes on, ended, or restarts.
-    pub step: SwingStep,
-    /// Whether the swing was in its active part at any moment of the tick, so a blow is checked
-    /// even when the active part is shorter than a tick.
-    pub was_active: bool,
-}
-
-/// Moves a swing on by `delta` seconds, through as many parts as that covers. A part of length 0
-/// is passed through in the same tick.
-pub fn advance_swing(
-    phase: SwingPhase,
-    elapsed: f32,
-    delta: f32,
-    timings: SwingTimings,
-) -> SwingAdvance {
-    let mut phase = phase;
-    let mut elapsed = elapsed + delta;
-    let mut was_active = phase == SwingPhase::Active;
-    loop {
-        let length = match phase {
-            SwingPhase::WindUp => timings.wind_up,
-            SwingPhase::Active => timings.active,
-            SwingPhase::Recovery { .. } => timings.recovery,
-        };
-        if elapsed < length {
-            return SwingAdvance {
-                phase,
-                elapsed,
-                step: SwingStep::Continue,
-                was_active,
-            };
-        }
-        elapsed -= length;
-        match phase {
-            SwingPhase::WindUp => {
-                phase = SwingPhase::Active;
-                was_active = true;
-            }
-            SwingPhase::Active => phase = SwingPhase::Recovery { queued: false },
-            SwingPhase::Recovery { queued } => {
-                let step = if queued {
-                    SwingStep::Restart
-                } else {
-                    SwingStep::Finished
-                };
-                return SwingAdvance {
-                    phase,
-                    elapsed: 0.0,
-                    step,
-                    was_active,
-                };
-            }
         }
     }
 }
@@ -284,12 +182,6 @@ mod tests {
     const REACH: f32 = 50.0;
     const HEIGHT: f32 = 40.0;
     const TOLERANCE: f32 = 10.0;
-    const TIMINGS: SwingTimings = SwingTimings {
-        wind_up: 0.05,
-        active: 0.1,
-        recovery: 0.2,
-    };
-    const TICK: f32 = 1.0 / 60.0;
     const SCREEN_WIDTH: f32 = 1000.0;
 
     fn hurt_at(x: f32, y: f32) -> Rect {
@@ -381,72 +273,6 @@ mod tests {
         assert_eq!(Facing::Left.after_input(0.0), Facing::Left);
         assert_eq!(Facing::Right.sign(), 1.0);
         assert_eq!(Facing::Left.sign(), -1.0);
-    }
-
-    /// Runs a whole swing tick by tick, returning the phase seen after each tick.
-    fn run(timings: SwingTimings, queue_in_recovery: bool) -> (Vec<SwingPhase>, SwingStep) {
-        let mut phase = SwingPhase::WindUp;
-        let mut elapsed = 0.0;
-        let mut seen = Vec::new();
-        for _ in 0..1000 {
-            if queue_in_recovery && phase == (SwingPhase::Recovery { queued: false }) {
-                phase = SwingPhase::Recovery { queued: true };
-            }
-            let advance = advance_swing(phase, elapsed, TICK, timings);
-            phase = advance.phase;
-            elapsed = advance.elapsed;
-            seen.push(phase);
-            if advance.step != SwingStep::Continue {
-                return (seen, advance.step);
-            }
-        }
-        panic!("the swing never ended");
-    }
-
-    #[test]
-    fn phases_advance_on_time() {
-        let (seen, step) = run(TIMINGS, false);
-        assert_eq!(step, SwingStep::Finished);
-        let count = |wanted: fn(&SwingPhase) -> bool| seen.iter().filter(|p| wanted(p)).count();
-        // 0.05 s, 0.1 s and 0.2 s at 60 ticks per second, give or take a tick at each boundary.
-        assert!((2..=3).contains(&count(|p| *p == SwingPhase::WindUp)));
-        assert!((5..=7).contains(&count(|p| *p == SwingPhase::Active)));
-        assert!((11..=13).contains(&count(|p| matches!(p, SwingPhase::Recovery { .. }))));
-        // The whole swing takes 0.35 s, about 21 ticks.
-        assert!((20..=22).contains(&seen.len()), "{}", seen.len());
-    }
-
-    #[test]
-    fn zero_length_wind_up_and_recovery_are_passed_in_one_tick() {
-        let instant = SwingTimings {
-            wind_up: 0.0,
-            active: 0.1,
-            recovery: 0.0,
-        };
-        let first = advance_swing(SwingPhase::WindUp, 0.0, TICK, instant);
-        assert_eq!(first.phase, SwingPhase::Active);
-        assert!(first.was_active);
-        let (seen, step) = run(instant, false);
-        assert_eq!(step, SwingStep::Finished);
-        assert!(!seen.contains(&SwingPhase::WindUp));
-    }
-
-    #[test]
-    fn a_very_short_active_part_is_still_reported_once() {
-        let short = SwingTimings {
-            wind_up: 0.0,
-            active: 0.001,
-            recovery: 0.2,
-        };
-        let advance = advance_swing(SwingPhase::WindUp, 0.0, TICK, short);
-        assert!(advance.was_active);
-        assert!(matches!(advance.phase, SwingPhase::Recovery { .. }));
-    }
-
-    #[test]
-    fn a_queued_press_in_recovery_restarts_the_swing() {
-        let (_, step) = run(TIMINGS, true);
-        assert_eq!(step, SwingStep::Restart);
     }
 
     #[test]
