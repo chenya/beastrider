@@ -36,8 +36,11 @@
   and the owner's checks 11 and 12, as the note at the top of the spec explains; every *how* is
   left to the plan.
 - **Resolved by the owner** (2026-11-22): F3 grunts enter from a random screen edge like normal
-  grunts (US4 sc. 3, FR-018); every killed grunt is replaced after the respawn delay, so the number
-  in play stays the same (Edge Cases, FR-010, SC-005). Validation passed on the second iteration.
+  grunts (US4 sc. 3, FR-018); a respawn rule (Edge Cases, FR-010, SC-005), revised during planning.
+  Validation passed on the second iteration.
+- **Revised during `/speckit-plan`** (2026-11-22): a new grunt enters only when none is left;
+  a grunt wind-up not longer than the hero's is accepted with a warning; knockback is per attacker,
+  while freeze, flash and shake stay shared.
 - **Clarified by the owner** (2026-11-22, `/speckit-clarify`): every hit stuns a grunt and cancels
   its attack in any part; the grunt's wind-up is kept longer than the hero's by its values, not by a
   validation rule; no dummy at the start of a run, dummies come from F6 and R clears them.

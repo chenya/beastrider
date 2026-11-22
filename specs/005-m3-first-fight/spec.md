@@ -28,12 +28,19 @@ as given by the owner in the `/speckit-specify` request)
   part (wind-up, active or recovery); the knockback usually pushes it out of reach, so it must walk
   in again before it can be hit again.
 - Q: Should the game reject a grunt wind-up that isn't longer than the hero's, or only use a longer
-  value as the starting point? → A: No such rule. The grunt's wind-up only has to be 0 or more;
-  the starting and final values make it clearly longer, and the quickstart checks that with the
-  final values.
+  value as the starting point? → A: Never rejected. The grunt's wind-up only has to be 0 or more;
+  the starting and final values make it clearly longer. *(Revised during planning, by the owner: a
+  grunt wind-up not longer than the hero's is accepted, but the reload message warns about it.)*
 - Q: At the start of a run, should the M2b training dummy still stand in the lane, or should
   dummies come only from F6? → A: No dummy at the start; dummies come only from F6, and R clears
   them.
+- Q (planning): When a grunt dies while others are still in play, is it replaced? → A: No. A new
+  grunt enters only when none is left: after the last grunt dies, the respawn delay passes and one
+  grunt enters. Extra grunts from F3 are one-offs. *(Replaces the owner's earlier answer during
+  `/speckit-specify`, "every killed grunt is replaced".)*
+- Q (planning): Is knockback one shared value for every blow, or does each attacker have its own?
+  → A: Each attacker has its own knockback distance and time (the hero's blow and the grunt's
+  blow); the freeze, flash and shake stay one shared set for every blow.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -99,8 +106,8 @@ grunt enters after the respawn delay. Hit another grunt during its wind-up: its 
    cancelled; after the stun it starts over (lines up, approaches, winds up again).
 3. **Given** a grunt's health reaches zero, **Then** it flashes, fades out over the death fade time
    and is removed; while fading it cannot attack, move or be hit, and it never counts twice.
-4. **Given** a grunt has died, **Then** the kill counter rises by exactly one, and after the respawn
-   delay a new grunt enters from a randomly chosen screen edge.
+4. **Given** a grunt has died, **Then** the kill counter rises by exactly one; if no other grunt is
+   left, a new grunt enters from a randomly chosen screen edge after the respawn delay.
 
 ---
 
@@ -189,8 +196,9 @@ with V-Sync on, then runs the Quality Gate and commits.
 **Why this priority**: Principle V and the Quality Gate apply to every milestone; several grunts
 hunting, striking and fading add work each frame.
 
-**Independent Test**: With five grunts, fight for 60 seconds by the clock (using F4 to stay alive),
-watching the FPS. Then run the Quality Gate and `git status`.
+**Independent Test**: With five grunts, fight for 60 seconds by the clock (using F4 to stay alive
+and F3 to keep five in play, since kills are not replaced while others remain), watching the FPS.
+Then run the Quality Gate and `git status`.
 
 **Acceptance Scenarios**:
 
@@ -208,9 +216,9 @@ watching the FPS. Then run the Quality Gate and `git status`.
 
 - **Several grunts at once** (F3): each hunts and attacks on its own; there is no turn-taking (out
   of scope). Grunts do not block each other, the hero, dummies or pillars; they overlap by depth.
-- **Grunt killed while others are in play**: every killed grunt is replaced by one new grunt after
-  the respawn delay, so the number in play stays the same; five grunts from F3 stay five. Each kill
-  has its own delay, so several kills close together bring several grunts.
+- **Grunt killed while others are in play**: no replacement comes; the next grunt enters only after
+  the last one has died (a grunt still fading out counts as gone) and the respawn delay has
+  passed. Five grunts from F3 become four, then three, and so on, until a single grunt is back.
 - **Grunt hit during its active part or recovery**: it is stunned like any hit; an attack whose
   blow has already landed is not undone.
 - **Grunt and hero hit each other in the same tick**: both hits count; each takes its damage and
@@ -258,11 +266,13 @@ watching the FPS. Then run the Quality Gate and `git status`.
   the hero's body during the active part, depth difference within the depth tolerance), at most
   once per attack.
 - **FR-006**: The grunt's wind-up MUST be its own tuning value, independent of the hero's. The
-  starting and final values MUST make it clearly longer than the hero's wind-up, but validation
-  MUST NOT compare the two, so the owner can try any value while tuning.
-- **FR-007**: When a blow lands on the hero or a grunt, the M2b hit effects MUST play with the M2b
-  impact values: one freeze per blow, a white flash on the one hit, the shake, and a knockback away
-  from the attacker that stays inside the lane and screen.
+  starting and final values MUST make it clearly longer than the hero's wind-up. A reload whose
+  grunt wind-up is not longer than the hero's MUST still be accepted, but its message MUST warn
+  that the grunt's attack may not be seen coming.
+- **FR-007**: When a blow lands on the hero or a grunt, the M2b hit effects MUST play: one freeze
+  per blow, a white flash on the one hit and the shake, all from one shared set of effect values;
+  and a knockback away from the attacker, with the attacker's own knockback distance and time, that
+  stays inside the lane and screen.
 - **FR-008**: A blow on a grunt MUST lower its health by the hero's damage and stun it for the grunt
   hit-stun time: during the stun it cannot move or attack, and any attack it had started is
   cancelled, whichever part (wind-up, active or recovery) it was in. After the stun it MUST resume
@@ -272,8 +282,8 @@ watching the FPS. Then run the Quality Gate and `git status`.
   blink and immune to further hits for the hero invulnerability time, counted from the hit.
 - **FR-010**: A grunt at zero health MUST flash, fade out over the death fade time and then be
   removed; while dying it cannot move, attack, be hit or block anything. Its death MUST add exactly
-  one to the kill count, and after the respawn delay a new grunt MUST enter from a random edge, one
-  new grunt for every grunt killed, so the number in play stays the same.
+  one to the kill count, and when no other grunt is left in play, a new grunt MUST enter from a
+  random edge after the respawn delay. Killing one of several grunts brings no replacement.
 - **FR-011**: At zero health the hero MUST fall (a visible change of the placeholder, such as
   tipping over), all grunts MUST stop, player input other than restart MUST be ignored, and a Game
   Over screen MUST show the kill count and "Press R to restart".
@@ -285,11 +295,12 @@ watching the FPS. Then run the Quality Gate and `git status`.
   builds. The M2a debug panel MUST NOT cover the health bar.
 - **FR-014**: Health and damage MUST belong to the hero identified by its player index; grunts MUST
   target and damage a hero through that index, never a single hard-coded "the player".
-- **FR-015**: The hero's and the grunt's maximum health, the hero's and the grunt's damage, the
-  grunt's walk speeds, wind-up, active and recovery times, reach and attack-box size, the grunt's
-  body size, the hero's body size, the hero and grunt hit-stun times, the hero's invulnerability
-  time, the respawn delay and the death fade time MUST be read from the tuning data file, checked
-  like the earlier values, and none may appear as a literal value in code.
+- **FR-015**: The hero's and the grunt's maximum health, the hero's and the grunt's damage and
+  knockback distance and time, the grunt's walk speeds, wind-up, active and recovery times, reach
+  and attack-box size, the grunt's body size, the hero's body size, the hero and grunt hit-stun
+  times, the hero's invulnerability time, the respawn delay and the death fade time MUST be read
+  from the tuning data file, checked like the earlier values, and none may appear as a literal value
+  in code.
 - **FR-016**: F5 MUST apply the fight values with the M2a reload rules (all or nothing). Speeds,
   damage and times apply from the next moment they are used (the next step, blow, attack, stun or
   death); an attack already under way finishes with the values it started with; maximum health
@@ -344,8 +355,8 @@ watching the FPS. Then run the Quality Gate and `git status`.
 - **SC-004**: Every strike that lands on the hero lowers its health by exactly the grunt's damage
   and plays all the hit effects; every strike during the invulnerability time does nothing.
 - **SC-005**: Every grunt killed raises the kill count by exactly one, fades out over the death fade
-  time, and is followed by a new grunt after the respawn delay; with five grunts in play, five
-  remain after any number of kills, once the delays have passed.
+  time; when it was the last grunt, a new one enters after the respawn delay, and killing one of
+  several grunts brings no replacement.
 - **SC-006**: At zero health the hero falls and the Game Over screen shows the same kill count the
   HUD showed.
 - **SC-007**: In 10 restarts (5 from Game Over, 5 during play), a fresh run (full health, kills 0,
@@ -372,8 +383,9 @@ watching the FPS. Then run the Quality Gate and `git status`.
   recovery about 0.4 s, reach about 60 px; hero hit-stun about 0.25 s, grunt hit-stun about 0.3 s;
   hero invulnerability about 1.0 s; respawn delay about 1.5 s; death fade about 0.5 s; the grunt's
   body about the hero's size.
-- **The hit effects are shared.** Freeze, flash, shake and knockback use M2b's single set of impact
-  values for every blow, whoever is hit; the owner can split them later if the playtest asks.
+- **The freeze, flash and shake are shared**: one set of values for every blow, whoever is hit.
+  Knockback is per attacker (clarified during planning): the hero's starting knockback stays M2b's
+  60 px over 0.2 s; the grunt's starts at about 80 px over 0.25 s, so its blow shoves harder.
 - **The depth tolerance is shared**: one value for every attacker, as in M2b.
 - **Grunt walk speeds** are horizontal and vertical, like the hero's, so lining up can be slower
   than closing in.
