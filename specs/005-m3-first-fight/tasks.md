@@ -160,7 +160,7 @@ warning shows.
 - [X] T042 [US4] In `godot/debug/debug_overlay.gd`: `## The spawner F3 asks for a grunt.` `@export var spawner: GruntSpawner`; in `_unhandled_input`, `debug_spawn_grunt` calls `spawner.spawn_now()`, `debug_refill_health` calls `hero.refill_health()` (add `#[func] refill_health()` to `rust/src/hero.rs`: health to max, nothing while `Dead`), both marking the event handled; `debug_spawn_dummy` (now F6) unchanged. After a reload, and at start, if `Tuning.warning()` is not empty, the message spot shows `"Tuning reloaded (warning: %s)"` and stays until the next reload. Then (owner) set the overlay's `spawner` → `GruntSpawner` in `godot/main.tscn` (depends on T040)
 - [X] T043 [US4] Confirm by windowed script runs: each new value in [contracts/tuning-data.md](contracts/tuning-data.md) changed and reloaded with F5 takes effect at the moment the contract gives (next tick, next attack, next hit, `max_health` at once with current lowered, `respawn_delay` and `death_fade_time` the next time); `grunt.max_health` 0, `grunt.attack.knockback_time` 0 with distance 80, and `run.respawn_delay` −1 are each rejected naming the field; `grunt.attack.wind_up_time` 0.05 is accepted with the warning, and restoring clears it; F3 adds a grunt from an edge, F4 refills (not at Game Over), F6 adds a dummy, F2 outlines everything. Restore `godot/data/tuning.json` afterwards (depends on T042)
 - [X] T044 [US4] Build and export a release (`cd rust && cargo build --release`, then `godot --headless --path godot --export-release Linux export/beastrider.x86_64`); confirm `godot/export/` holds the binary, `.pck` and `libbeastrider.so` and that a 5-second run prints no errors (depends on T042)
-- [ ] T045 [US4] (owner) Quickstart scenarios 7 and 10–14: no replacement while a grunt lives, retune live, the bad values, the warning, the cheats, and the release build (fight, bars, kills, Game Over and R work; F1–F6 do nothing) (depends on T043, T044)
+- [X] T045 [US4] (owner) Quickstart scenarios 7 and 10–14: no replacement while a grunt lives, retune live, the bad values, the warning, the cheats, and the release build (fight, bars, kills, Game Over and R work; F1–F6 do nothing) (depends on T043, T044)
 
 **Checkpoint**: The fight can be tuned live; cheats exist in debug builds only.
 
@@ -172,8 +172,8 @@ warning shows.
 
 **Independent Test**: [quickstart.md](quickstart.md) scenario 16.
 
-- [ ] T046 [US5] (owner) Play and retune `godot/data/tuning.json` with F5 until the fight feels fair, using F2, F3, F4 and F6 as needed. Then play five runs to Game Over with the final values and judge: could every hit taken have been seen coming (SC-012)? If not, keep retuning; the milestone is not done until the answer is yes (depends on T045)
-- [ ] T047 [US5] Record the final values: confirm `godot/data/tuning.json` holds them, passes the rules and gives no warning; update the starting values in `specs/005-m3-first-fight/contracts/tuning-data.md` to match, so the contract shows what shipped (depends on T046)
+- [X] T046 [US5] (owner) Play and retune `godot/data/tuning.json` with F5 until the fight feels fair, using F2, F3, F4 and F6 as needed. Then play five runs to Game Over with the final values and judge: could every hit taken have been seen coming (SC-012)? If not, keep retuning; the milestone is not done until the answer is yes (depends on T045)
+- [X] T047 [US5] Record the final values: confirm `godot/data/tuning.json` holds them, passes the rules and gives no warning; update the starting values in `specs/005-m3-first-fight/contracts/tuning-data.md` to match, so the contract shows what shipped (depends on T046)
 
 **Checkpoint**: The owner says the fight is fair.
 
@@ -185,7 +185,7 @@ warning shows.
 
 **Independent Test**: [quickstart.md](quickstart.md) scenarios 15, 18, 19 and 21.
 
-- [ ] T048 [US6] (owner) Quickstart scenario 15: F3 to five grunts, F2 on, panel open; fight for 60 s by the clock, F4 to stay alive and F3 to keep five, window focused. FPS stays 60 apart from the first second and the impact freezes (depends on T045)
+- [X] T048 [US6] (owner) Quickstart scenario 15: F3 to five grunts, F2 on, panel open; fight for 60 s by the clock, F4 to stay alive and F3 to keep five, window focused. FPS stays 60 apart from the first second and the impact freezes (depends on T045)
 - [X] T049 [US6] In `rust/`, run `cargo fmt --check`, `cargo build`, `cargo clippy --all-targets` and `cargo test`; fix every warning in `rust/src/*.rs` until all pass with 0 warnings. No `#[allow]` without a written reason
 - [X] T050 [US6] Check every GDScript file (`godot/world/hit_flash.gd`, `hero_body.gd`, `grunt_body.gd`, `grunt_health_bar.gd`, `screen_shake.gd`, `lane_band.gd`, `godot/ui/fps_label.gd`, `health_bar.gd`, `kills_label.gd`, `game_over.gd`, `godot/debug/debug_overlay.gd`, `debug_markers.gd`, `debug_hitboxes.gd`) through the editor's language server, as in M2b's T031: 0 errors or warnings, `untyped_declaration` still Error
 
@@ -203,8 +203,8 @@ warning shows.
 - [X] T054 [P] Review docs: `//!` module docs on `rust/src/fighter.rs`, `fighters.rs`, `grunt.rs`, `grunt_spawner.rs`, `run.rs`; `///` on every public item and everything exposed to Godot, including the new signals; `// SAFETY:` in `rust/src/lib.rs` unchanged; `##` docs on every new script and exported property
 - [X] T055 Run the Constitution compliance review required by Governance: check the finished work against Principles I–VIII (v1.3.3) and the Code Style section, using the table in `specs/005-m3-first-fight/plan.md` as the checklist; record any departure (for example scenes built by the agent) in that file's Complexity Tracking
 - [X] T056 After a build, a Play and the export, run `git status`: `rust/target/`, `godot/.godot/` and `godot/export/` absent; the new and changed Rust modules, `godot/autoload/run.tscn`, `godot/world/grunt.tscn`, the new and renamed `.gd` files with their `.uid` files, `godot/main.tscn`, `godot/world/training_dummy.tscn`, `godot/project.godot` and `godot/data/tuning.json` present to be committed
-- [ ] T057 (owner) Run the full quickstart.md, scenarios 1–21, in one sitting on the target machine; scenario 20 re-checks M2b and M2a
-- [ ] T058 Commit the M3 implementation on branch `feat/m3-first-fight` in small logical commits that each pass the gate on their own staged tree (for example: input actions; tuning restructure with the shared fighter parts and the refactored hero and dummy; `Run` autoload; the grunt, spawner and their scenes; hits on grunts, death and kills; game over and restart; cheats and warning; final values and docs), staging by explicit path and reviewing `git diff --staged` before each, as the owner's git rules require. Ask the owner before committing; then `git status` must be clean (depends on T046–T057)
+- [X] T057 (owner) Run the full quickstart.md, scenarios 1–21, in one sitting on the target machine; scenario 20 re-checks M2b and M2a
+- [X] T058 Commit the M3 implementation on branch `feat/m3-first-fight` in small logical commits that each pass the gate on their own staged tree (for example: input actions; tuning restructure with the shared fighter parts and the refactored hero and dummy; `Run` autoload; the grunt, spawner and their scenes; hits on grunts, death and kills; game over and restart; cheats and warning; final values and docs), staging by explicit path and reviewing `git diff --staged` before each, as the owner's git rules require. Ask the owner before committing; then `git status` must be clean (depends on T046–T057)
 
 ---
 
