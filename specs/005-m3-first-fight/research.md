@@ -126,8 +126,10 @@ during planning (see [plan.md, Spec and input alignment](plan.md#spec-and-input-
   `SpawnerState { AwaitingFirst, Watching, Waiting(Countdown) }`:
   - `AwaitingFirst`: as soon as tuning is valid, spawn one grunt with no delay (FR-001), then
     `Watching`. A bad start-up tuning file therefore holds the first grunt back (spec, Edge Cases).
-  - `Watching`: when no living grunt is in the `Enemies` group (a dying grunt has left it), start
-    the respawn delay → `Waiting`.
+  - `Watching`: when no living grunt is left, start the respawn delay → `Waiting`. A living grunt
+    is any `Grunt` child of `World` that is not `Dying` (`Grunt::is_alive()`); an entering grunt
+    counts as living even though it has not joined the `Enemies` group yet, so no second grunt is
+    spawned while the first walks in.
   - `Waiting`: counts down `run.respawn_delay` (paused by the hit-stop freeze); at zero, spawn one
     and go back to `Watching`. If a grunt appears meanwhile (F3), go back to `Watching` without
     spawning: the rule is "a new grunt only when none is left" (owner's answer during planning).

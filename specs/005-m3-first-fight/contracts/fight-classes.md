@@ -39,6 +39,7 @@ replaces the Rust `ready()`); scripts go on its children.
 | `died()` | signal | Emitted once, when its health reaches zero; it frees itself `run.death_fade_time` later. |
 | `health() -> f32`, `max_health() -> f32` | func | For its bar. |
 | `is_winding_up() -> bool` | func | True during the wind-up; drives the wind-up colour. |
+| `is_alive() -> bool` | func | False once dying; the spawner counts living grunts with it. |
 | `hurtbox() -> Rect2` | func | For F2; empty while entering or dying. |
 | `attack_box() -> Rect2` | func | Its reach while its attack is active, else empty. For F2. |
 

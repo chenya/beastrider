@@ -127,7 +127,8 @@ unit-tested (a hit in any attack mode cancels it).
 ## GruntSpawner (new)
 
 `SpawnerState { AwaitingFirst, Watching, Waiting(Countdown) }`; pure `tick(state, living_grunts,
-tuning_ready, playing, delta) -> (SpawnerState, spawn: bool)`:
+tuning_ready, playing, delta) -> (SpawnerState, spawn: bool)`, where `living_grunts` counts the
+`Grunt` children of `World` that are not `Dying` (entering grunts count):
 
 | From | Condition | To | Spawn |
 | --- | --- | --- | --- |
