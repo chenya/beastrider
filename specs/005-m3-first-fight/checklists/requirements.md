@@ -38,9 +38,10 @@
 - **Resolved by the owner** (2026-11-22): F3 grunts enter from a random screen edge like normal
   grunts (US4 sc. 3, FR-018); every killed grunt is replaced after the respawn delay, so the number
   in play stays the same (Edge Cases, FR-010, SC-005). Validation passed on the second iteration.
-- **Defaults chosen instead of clarifications** (see Assumptions and Edge Cases): the scene dummy
-  is gone and dummies come from F6; validation rejects a grunt wind-up not longer than the hero's;
-  a hit on the hero cancels its swing and stuns it; grunts are stunned by every hit; hit effects
-  and depth tolerance are shared by everyone; grunts ignore dummies and do not block anything;
-  R resets the M2b hit counter; F4 does nothing at Game Over; the debug panel moves below the
-  health bar.
+- **Clarified by the owner** (2026-11-22, `/speckit-clarify`): every hit stuns a grunt and cancels
+  its attack in any part; the grunt's wind-up is kept longer than the hero's by its values, not by a
+  validation rule; no dummy at the start of a run, dummies come from F6 and R clears them.
+- **Defaults chosen instead of clarifications** (see Assumptions and Edge Cases): a hit on the hero
+  cancels its swing and stuns it; hit effects and depth tolerance are shared by everyone; grunts
+  ignore dummies and do not block anything; R resets the M2b hit counter; F4 does nothing at Game
+  Over; the debug panel moves below the health bar.

@@ -19,6 +19,22 @@ as given by the owner in the `/speckit-specify` request)
 > owner's acceptance checks 11 and 12, not choices made by this spec. Every *how* (node types, class
 > names, data layout, how the restart is done) is left to the plan.
 
+## Clarifications
+
+### Session 2026-11-22
+
+- Q: When the hero lands a blow on a grunt, should the grunt always be stunned and have its attack
+  cancelled, even mid-strike? → A: Yes. Every hit stuns the grunt and cancels its attack in any
+  part (wind-up, active or recovery); the knockback usually pushes it out of reach, so it must walk
+  in again before it can be hit again.
+- Q: Should the game reject a grunt wind-up that isn't longer than the hero's, or only use a longer
+  value as the starting point? → A: No such rule. The grunt's wind-up only has to be 0 or more;
+  the starting and final values make it clearly longer, and the quickstart checks that with the
+  final values.
+- Q: At the start of a run, should the M2b training dummy still stand in the lane, or should
+  dummies come only from F6? → A: No dummy at the start; dummies come only from F6, and R clears
+  them.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A grunt hunts the hero and strikes (Priority: P1)
@@ -241,21 +257,23 @@ watching the FPS. Then run the Quality Gate and `git status`.
 - **FR-005**: The grunt's strike MUST land on the hero using the M2b rule (attack box overlapping
   the hero's body during the active part, depth difference within the depth tolerance), at most
   once per attack.
-- **FR-006**: Tuning validation MUST reject a grunt wind-up that is not longer than the hero's
-  wind-up, so the grunt's attack can always be seen coming.
+- **FR-006**: The grunt's wind-up MUST be its own tuning value, independent of the hero's. The
+  starting and final values MUST make it clearly longer than the hero's wind-up, but validation
+  MUST NOT compare the two, so the owner can try any value while tuning.
 - **FR-007**: When a blow lands on the hero or a grunt, the M2b hit effects MUST play with the M2b
   impact values: one freeze per blow, a white flash on the one hit, the shake, and a knockback away
   from the attacker that stays inside the lane and screen.
-- **FR-008**: A blow on a grunt MUST lower its health by the hero's damage and stun it for the
-  grunt hit-stun time: during the stun it cannot move or attack, and any attack it had started is
-  cancelled. After the stun it MUST resume hunting from its new position.
+- **FR-008**: A blow on a grunt MUST lower its health by the hero's damage and stun it for the grunt
+  hit-stun time: during the stun it cannot move or attack, and any attack it had started is
+  cancelled, whichever part (wind-up, active or recovery) it was in. After the stun it MUST resume
+  hunting from its new position.
 - **FR-009**: A blow on the hero MUST lower its health by the grunt's damage, cancel any swing in
   progress, stun the hero for the hero hit-stun time (no moving or attacking), and make the hero
   blink and immune to further hits for the hero invulnerability time, counted from the hit.
 - **FR-010**: A grunt at zero health MUST flash, fade out over the death fade time and then be
   removed; while dying it cannot move, attack, be hit or block anything. Its death MUST add exactly
-  one to the kill count, and after the respawn delay a new grunt MUST enter from a random edge, one new grunt
-  for every grunt killed, so the number in play stays the same.
+  one to the kill count, and after the respawn delay a new grunt MUST enter from a random edge, one
+  new grunt for every grunt killed, so the number in play stays the same.
 - **FR-011**: At zero health the hero MUST fall (a visible change of the placeholder, such as
   tipping over), all grunts MUST stop, player input other than restart MUST be ignored, and a Game
   Over screen MUST show the kill count and "Press R to restart".
@@ -277,8 +295,8 @@ watching the FPS. Then run the Quality Gate and `git status`.
   death); an attack already under way finishes with the values it started with; maximum health
   applies at once, with current health lowered to it if needed.
 - **FR-017**: Health values MUST be greater than 0, damage MUST be greater than 0, the grunt's walk
-  speeds, active time and reach MUST be greater than 0, the grunt's wind-up MUST be longer than the
-  hero's (FR-006); every other new time MAY be 0 and no value may be negative.
+  speeds, active time and reach MUST be greater than 0; every other new time, the grunt's wind-up
+  included (FR-006), MAY be 0, and no value may be negative.
 - **FR-018**: F3 MUST spawn one more grunt, entering from a random screen edge exactly like a
   normal grunt (FR-001), F6 MUST spawn
   a training dummy exactly as M2b's F3 did, and F4 MUST refill the hero's health to its maximum
@@ -319,7 +337,8 @@ watching the FPS. Then run the Quality Gate and `git status`.
 
 - **SC-001**: In 10 approaches from different depths, the grunt reaches the hero's depth before it
   closes the horizontal distance, and it starts no attack while out of range or out of depth.
-- **SC-002**: The grunt's wind-up, measured frame by frame, is longer than the hero's every time;
+- **SC-002**: With the final values, the grunt's wind-up, measured frame by frame, is longer than
+  the hero's every time;
   in 10 attacks where the hero steps out of depth during the wind-up, 0 strikes land.
 - **SC-003**: In 10 blows landed on a grunt during its wind-up, 0 of its strikes follow.
 - **SC-004**: Every strike that lands on the hero lowers its health by exactly the grunt's damage
