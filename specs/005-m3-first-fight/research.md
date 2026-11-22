@@ -103,6 +103,9 @@ during planning (see [plan.md, Spec and input alignment](plan.md#spec-and-input-
   depth difference is within tolerance, i.e. `resolve_attack` would land now (FR-004). From then
   until the end of recovery it neither moves nor turns; the strike lands if the target is still
   there during `Active` (FR-005).
+  *Found during implementation*: because `resolve_attack` skips invulnerable targets, a grunt does
+  not start an attack while the hero blinks; it stands at its slot and winds up once the blink
+  ends. That keeps the blink a real breather and adds no rule of its own.
 - **Hit**: any landed hit, in any mode but `Entering` and `Dying`, switches to `HitStun` for
   `grunt.hit_stun_time`, dropping the attack (clarification Q1); after it, back to `Approaching`.
 - **Dying** (`Killed`): emits `died()` once, adds one kill to the run, leaves the `Enemies` group
@@ -176,11 +179,14 @@ during planning (see [plan.md, Spec and input alignment](plan.md#spec-and-input-
     two rectangles above the head from `health()`/`max_health()` each frame).
   - **Hero**: its `Body` gets the flash material and `hero_body.gd` (flash on `was_hit`, blink while
     `is_invulnerable()`, tip over on `died`).
-  - **Shared flash**: M2b's `dummy_flash.gd` becomes `hit_flash.gd` (renamed); `hero_body.gd` and
-    `grunt_body.gd` extend it; the dummy's `Body` uses it directly.
+  - **Shared flash**: M2b's `dummy_flash.gd` becomes `hit_flash.gd` (renamed), declared as
+    `class_name HitFlash` and connected through `Signal(get_parent(), &"was_hit")` so it works
+    under any fighter; `hero_body.gd` and `grunt_body.gd` extend it; the dummy's `Body` uses it
+    directly.
   - **Shake**: `screen_shake.gd` listens to `was_hit` of every `Hero`, `Grunt` and `TrainingDummy`
     entering the tree.
-  - **Game Over**: a `GameOver` CanvasLayer in `main.tscn`, hidden at start, shown by
+  - **Game Over**: a `GameOver` CanvasLayer (layer 2, between the HUD on layer 1 and the debug
+    overlay, moved to layer 3) in `main.tscn`, hidden at start, shown by
     `Run.game_over(kills)` with "Game Over", the kill count and "Press R to restart".
   - Blink rate, colours and the fall angle are looks, kept as GDScript constants (as M2b's colours).
 - **Re-entrancy rule**: signal handlers use their arguments and read only *other* objects (the

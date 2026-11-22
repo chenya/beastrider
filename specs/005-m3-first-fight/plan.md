@@ -87,8 +87,14 @@ Constitution v1.3.3. ✅ = passes.
 | **Code Style: shared naming** | ✅ | ✅ | `Grunt`, `GruntSpawner`, `RunTracker`, `died`, `game_over` the same in Rust, the editor and GDScript; autoload `Run` differs from class `RunTracker` on purpose (M2b lesson). |
 | **Quality Gate** | ✅ | ✅ | fmt, build and clippy with 0 warnings, `cargo test`, 0 GDScript warnings, every check passed by playing (quickstart 1–21), including the fairness playtest. |
 
-**Result**: both passes are green. The one expected departure (scenes built by script, if the owner
-hands those tasks over) is recorded below, as in M0–M2b.
+**Result**: both passes are green. The T055 review after implementation found the work matches
+every row above; its one departure (scenes and settings changed by the agent, at the owner's
+request) is recorded below, as in M0–M2b. Details settled while building are recorded in research:
+a grunt does not start an attack while its target is invulnerable, so it waits out the blink (R5);
+`Countdown::tick` reports "run out" on every tick after it reaches 0, so a zero-length stun or delay
+ends at once (R2); the shared flash script is the class `HitFlash`, which the hero's and the grunt's
+body scripts extend (R8); and the Game Over layer sits between the HUD (layer 1) and the debug
+overlay, which moved to layer 3 (R8).
 
 ## Spec and input alignment
 
@@ -193,7 +199,7 @@ fighter presentation in `godot/world/`; debug-only scripts stay in `godot/debug/
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 | --- | --- | --- |
-| `main.tscn`, `grunt.tscn`, `autoload/run.tscn`, `training_dummy.tscn` and the Input Map may be changed by the agent rather than by hand in the editor (Tech: "Scenes, nodes and animation are built in the Godot editor"), as in M0–M2b. Applies only if the owner hands those tasks over. | The agent cannot use the editor GUI, and godot-mcp's scene tools fail on this project's untyped-declaration error. The result is ordinary `.tscn` files that open in the editor. | Building by hand in the editor stays the default; relaxing the untyped-declaration error was rejected because it would break the GDScript style rule. |
+| `main.tscn`, `grunt.tscn`, `autoload/run.tscn`, `training_dummy.tscn` and the Input Map were changed by the agent rather than by hand in the editor (Tech: "Scenes, nodes and animation are built in the Godot editor"), as in M0–M2b. The owner handed T002, T012, T024, T025, T033, T039 and T042's scene part over at the start of `/speckit-implement`. They were done with `ProjectSettings` (actions), `PackedScene.pack` + `ResourceSaver.save` (`grunt.tscn`, `main.tscn`), and direct text edits for the one-node `autoload/run.tscn`, its autoload line, the renamed flash script's path in `training_dummy.tscn`, and two `null` shader parameters the packer wrote. | The agent cannot use the editor GUI, and godot-mcp's scene tools fail on this project's untyped-declaration error. The result is ordinary `.tscn` files that open in the editor. | Building by hand in the editor stays the default; relaxing the untyped-declaration error was rejected because it would break the GDScript style rule. |
 
 ## Follow-ups (outside M3)
 

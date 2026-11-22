@@ -41,8 +41,9 @@ waits while play is frozen, so it starts when the freeze ends.
 
 ### Countdown
 
-`Countdown { remaining }`: `start(s)`, `tick(delta) -> bool` (true on the tick it reaches 0),
-`is_running()`. Used for hit-stun, invulnerability, dying and the respawn delay.
+`Countdown { remaining }`: `new(s)`, `tick(delta) -> bool` (true on the tick it reaches 0 and on
+every tick after, so a countdown of 0 ends at once), `is_running()`. Used for hit-stun,
+invulnerability, dying and the respawn delay.
 
 ### Team, Attacker, Target, Hit
 
