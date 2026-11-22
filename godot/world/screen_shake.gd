@@ -1,8 +1,8 @@
 extends Camera2D
-## Shakes the play area when a training dummy is hit.
+## Shakes the play area when any fighter is hit: the hero, a grunt or a training dummy.
 ##
-## Presentation only: it listens to [signal TrainingDummy.was_hit] on every dummy that enters the
-## tree, including ones spawned later, and reads the shake strength and length from the
+## Presentation only: it listens to [code]was_hit[/code] on every fighter that enters the tree,
+## including ones spawned later, and reads the shake strength and length from the
 ## [code]Tuning[/code] autoload when a shake starts. It runs in [method _process], so it keeps
 ## shaking through the impact freeze. HUD and overlay sit on their own canvas layers and stay still.
 ## Several hits on one tick restart one shake; they never add up. A strength or length of 0 turns
@@ -14,7 +14,7 @@ var _time_left := 0.0
 
 
 func _enter_tree() -> void:
-	# Connected before the scene's other nodes enter, so dummies placed in the scene are caught too.
+	# Connected before the scene's other nodes enter, so fighters placed in the scene are caught too.
 	get_tree().node_added.connect(_on_node_added)
 
 
@@ -27,7 +27,11 @@ func _process(delta: float) -> void:
 
 
 func _on_node_added(node: Node) -> void:
-	if node is TrainingDummy:
+	if node is Hero:
+		(node as Hero).was_hit.connect(_on_was_hit)
+	elif node is Grunt:
+		(node as Grunt).was_hit.connect(_on_was_hit)
+	elif node is TrainingDummy:
 		(node as TrainingDummy).was_hit.connect(_on_was_hit)
 
 

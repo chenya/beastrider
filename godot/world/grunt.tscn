@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://world/flash.gdshader" id="1_ulclu"]
+[ext_resource type="Script" path="res://world/grunt_body.gd" id="2_ux0yi"]
+[ext_resource type="Script" path="res://world/grunt_health_bar.gd" id="3_802jh"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ypwr6"]
+resource_local_to_scene = true
+shader = ExtResource("1_ulclu")
+
+[node name="Grunt" type="Grunt" unique_id=1734699206]
+
+[node name="Body" type="Polygon2D" parent="." unique_id=1197086829]
+material = SubResource("ShaderMaterial_ypwr6")
+color = Color(0.47843137, 0.23137255, 0.56078434, 1)
+polygon = PackedVector2Array(-26, -100, 26, -100, 26, 0, -26, 0)
+script = ExtResource("2_ux0yi")
+
+[node name="HealthBar" type="Node2D" parent="." unique_id=1295114784]
+script = ExtResource("3_802jh")
