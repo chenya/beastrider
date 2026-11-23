@@ -35,10 +35,21 @@ acceptance checks and out-of-scope list as given by the owner in the `/speckit-s
   waiting off screen until others die? → A: Yes. A tuned on-screen maximum (starting at 10): a
   wave's extra enemies enter as others die, and the wave clears only when all of them are dead.
 - Q: When an attacker's turn is freed, which waiting enemy should get it? → A: The one that has
-  waited longest (first come, first served).
+  waited longest (first come, first served). *(Revised during planning, by the owner: the waiting
+  enemy nearest its target gets it.)*
 - Q: While waiting for a turn, should an enemy just hold its spot at the waiting distance, or keep
   moving around the hero? → A: It drifts slowly around the hero at the waiting distance, changing
-  depth and side, at a tuned drift speed; a drift speed of 0 makes it hold still.
+  depth and side, at a tuned drift speed; a drift speed of 0 makes it hold still. *(Revised during
+  planning, by the owner: each waiting enemy has a waiting spot on its own side of the hero, at
+  least the waiting distance away and at its own depth, and drifts to it at the drift speed as the
+  hero moves; it does not cross to the other side.)*
+- Q (planning): How is the attacker limit counted? → A: As attack tokens: a pool of tuned size,
+  and each kind costs its own number of tokens to close in (starting at 1 for a grunt and 2 for a
+  brute), so a brute can take a whole turn's worth alone.
+- Q (planning): Do a wave's enemies enter while its banner shows? → A: No. The banner shows for
+  the banner time, then the enemies start entering.
+- Q (planning): Does F8 wait out a breather? → A: No. It removes every enemy with no points and
+  starts the next wave's banner at once.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -105,26 +116,27 @@ grunt; let it strike and compare the health lost; watch its wind-up and how far 
 ### User Story 3 - Enemies take turns (Priority: P1)
 
 With several enemies in play, only a limited number (set in the data) close in and attack at one
-time. The others hold back at a waiting distance from the hero, drifting slowly around it, and
-each takes a turn when an attacker finishes its attack or dies. Enemies do not stack into one
+time. The others hold back on their own side of the hero, at least a waiting distance away,
+drifting to stay there, and the one nearest the hero takes a turn when an attacker finishes its
+attack, is stunned or dies. Enemies do not stack into one
 overlapping shape, whether approaching or waiting.
 
 **Why this priority**: Without turns, a wave of five or more enemies would strike at once and no
 hit could be seen coming. The owner's check 10 (deaths that felt earned) depends on it.
 
-**Independent Test**: Press F3 until six grunts are in play, with the attacker limit at 2: at most
-two close in and strike at any time; the rest hold their distance. Kill an attacker: a waiting one
+**Independent Test**: Press F3 until six grunts are in play, with 2 attack tokens: at most two
+close in and strike at any time; the rest hold their distance. Kill an attacker: a waiting one
 moves in. Watch the waiting ones: none sits inside another.
 
 **Acceptance Scenarios**:
 
-1. **Given** more enemies in play than the attacker limit, **When** they hunt the hero, **Then** no
-   more than the limit are closing in or attacking at any moment.
-2. **Given** an enemy without a turn, **Then** it stays at about the waiting distance from the
-   hero, drifts slowly around it (changing depth and side) at the drift speed, never starts an
-   attack, and keeps facing the hero.
-3. **Given** an attacker finishes its attack's recovery, is stunned or dies, **Then** its turn is
-   freed and the enemy that has waited longest takes it.
+1. **Given** more enemies in play than the attack tokens allow, **When** they hunt the hero,
+   **Then** the tokens held by enemies closing in or attacking never add up to more than the pool.
+2. **Given** an enemy without a turn, **Then** it drifts at the drift speed to its waiting spot on
+   its own side of the hero (at least the waiting distance away, at its own depth), never starts
+   an attack, and keeps facing the hero.
+3. **Given** an attacker finishes its attack's recovery, is stunned or dies, **Then** its tokens are
+   freed and the waiting enemy nearest the hero takes a turn, once enough tokens are free for it.
 4. **Given** several enemies approaching or waiting, **Then** no two of them overlap into one
    shape; they spread out while keeping depth order.
 
@@ -149,7 +161,7 @@ best still shows the higher one.
 1. **Given** a grunt dies, **Then** the score rises by the grunt's points; **given** a brute dies,
    **Then** it rises by the brute's points.
 2. **Given** the hero falls, **Then** Game Over shows the score, the wave reached (the wave in
-   progress or about to start), the kill count and the session best, the higher of the old best and
+   progress, or during a breather the wave just cleared), the kill count and the session best, the higher of the old best and
    this run's score.
 3. **Given** Game Over or a run in progress, **When** the owner presses R, **Then** within two
    seconds a fresh run plays from wave 1 with score 0 and kills 0, and the session best is kept.
@@ -160,7 +172,7 @@ best still shows the higher one.
 ### User Story 5 - Tune the waves live, and cheat (Priority: P2)
 
 The owner keeps the game running, changes the wave make-up, the escalation rule, the breather time,
-the brute's values, the attacker limit, the waiting distance, the drift speed or the points per
+the brute's values, the attack tokens, the waiting distance, the drift speed or the points per
 enemy in the tuning data, saves and presses F5; the change applies live. F3 spawns a grunt, F7 a
 brute, and F8 ends the current wave and starts the next.
 
@@ -241,9 +253,11 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
 - **F8 at Game Over**: does nothing; nor do F3 and F7.
 - **Enemies fading out**: a dying enemy no longer counts as alive, holds no turn, and does not keep
   the wave going; its points are added when it starts dying, once.
-- **Attacker limit raised or lowered with F5**: a lower limit takes no turn away from an enemy
-  already mid-attack; it applies as turns are freed.
-- **Attacker limit larger than the enemies in play**: every enemy may close in, as in M3.
+- **Token pool or costs changed with F5**: a smaller pool takes no turn away from an enemy already
+  holding one; it applies as tokens are freed and handed out again.
+- **More tokens than the enemies in play need**: every enemy may close in, as in M3.
+- **The nearest waiting enemy costs more than the free tokens** (a brute while one grunt attacks):
+  it waits until enough are free; no farther grunt goes first.
 - **An enemy waiting while the hero walks right up to it**: it does not attack without a turn; it
   moves back to keep its waiting distance where the lane and screen allow.
 - **A waiting enemy is hit**: it takes damage, effects and its stun as usual; being hit gives it no
@@ -266,8 +280,8 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
   0, kill count 0, and wave 1's enemies entering. M3's rule of one grunt respawning after the last
   dies MUST be replaced by waves.
 - **FR-002**: Each wave MUST start with a banner naming its number ("Wave 1", "Wave 2", …), shown
-  for a short time while its enemies enter. Its enemies MUST enter from randomly chosen screen
-  edges (left or right) at random depths inside the lane, one after another rather than all in the
+  for the banner time; its enemies MUST start entering when the banner ends, from randomly chosen
+  screen edges (left or right) at random depths inside the lane, one after another rather than all in the
   same instant.
 - **FR-003**: Each wave written in the tuning data MUST bring exactly the number of grunts and
   brutes the data gives for it.
@@ -294,15 +308,15 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
 - **FR-009**: The brute MUST reuse the same shared parts as the hero and the grunt for health,
   attack timing, knockback and hit resolution, with only its own values and its look being new; its
   behaviour MUST NOT be a copy of the grunt's.
-- **FR-010**: No more than the attacker limit (from the data) of enemies MUST be closing in or
-  attacking at one time. Every other enemy MUST stay at about the waiting distance (from the data)
-  from the hero, drift around it at the drift speed (from the data), changing depth and side within
-  the lane and screen, keep facing it, and never start an attack. A drift speed of 0 MUST make it
-  hold still at the waiting distance.
-- **FR-011**: A turn MUST be freed when its enemy finishes its attack's recovery, is stunned, or
-  dies, and MUST then pass to the waiting enemy that has waited longest. An enemy starts waiting
-  when it is in play without a turn, and an enemy whose turn ends goes to the back of the line.
-  Grunts and brutes MUST share one attacker limit and one line.
+- **FR-010**: An enemy MUST hold its kind's attack-token cost (from the data) to close in and
+  attack, and the tokens held at one time MUST never exceed the token pool (from the data). Every
+  other enemy MUST wait: it drifts at the drift speed (from the data) to its waiting spot, on its
+  own side of the hero, at least the waiting distance (from the data) away and at its own depth,
+  within the lane and screen; it keeps facing the hero and never starts an attack. A drift speed
+  of 0 MUST make it hold still.
+- **FR-011**: An enemy's tokens MUST be freed when it finishes its attack's recovery, is stunned,
+  or dies. Free tokens MUST go to the waiting enemy nearest the hero, and only when its whole cost
+  fits; a farther enemy is not served first. Grunts and brutes MUST share one token pool.
 - **FR-012**: Enemies approaching or waiting MUST keep apart so that no two overlap into one shape,
   while staying in the lane and on screen and keeping depth order.
 - **FR-013**: Each kill MUST add the dead enemy's points (grunt points or brute points, from the
@@ -317,14 +331,15 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
   session best, within two seconds of the press, in debug and release builds.
 - **FR-017**: The wave list (grunts and brutes per wave), the escalation rule, the breather time,
   the banner time, the time between enemies entering, the on-screen maximum, every brute value in
-  FR-007, the attacker limit, the waiting distance, the drift speed and the points per grunt and per
+  FR-007, the token pool and each kind's token cost, the waiting distance, the drift speed, the
+  separation distance and the points per grunt and per
   brute MUST be read from the tuning data file, checked like the earlier values, and none may
   appear as a literal value in code. F5
   MUST apply them with the M2a reload rules (all or nothing): a changed wave list or escalation
   rule applies from the next wave to start; enemy values from the next moment they are used, as in
-  M3; the attacker limit as turns are next handed out; points from the next kill.
-- **FR-018**: Health, damage, walk speeds, active time, reach, the attacker limit, the on-screen
-  maximum, the points and the waiting distance MUST be greater than 0; the wave list MUST hold at
+  M3; the token pool and costs as tokens are next handed out; points from the next kill.
+- **FR-018**: Health, damage, walk speeds, active time, reach, the token pool, each token cost
+  (also at most the pool), the on-screen maximum, the points and the waiting distance MUST be greater than 0; the wave list MUST hold at
   least one wave, and each wave at least one enemy; every other new value (the drift speed
   included) MAY be 0, and no value may be negative.
 - **FR-019**: F3 MUST spawn one more grunt and F7 one more brute, each entering from a random edge
@@ -336,7 +351,7 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
 - **FR-021**: Everything from M3 MUST keep working: the hero's moves, health, stun and
   invulnerability, the grunt's attack and its warning, the hit effects, Game Over, R, F1, F2, F4,
   F5 and F6. F2 MUST also outline each brute's body and its attack box while its blow can land.
-- **FR-022**: Wave progression, the attacker limit and turns, enemy behaviour, keeping apart, the
+- **FR-022**: Wave progression, the attack tokens and turns, enemy behaviour, keeping apart, the
   score and the session best MUST be owned by the rules side (Rust), with modes as closed sets
   checked exhaustively. Banners, the HUD score, the brute's look and the Game Over screen MUST be
   presentation (GDScript) reading from the rules side and reacting to its signals.
@@ -356,8 +371,9 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
   past its end, from the escalation rule.
 - **Brute**: an enemy like the grunt, with its own values and look: bigger, slower, tougher,
   harder-hitting, longer wind-up, less knockback and stun taken.
-- **Turn**: the right to close in and attack. At most the attacker limit are held at once, handed
-  out first come, first served; an enemy without one drifts at the waiting distance.
+- **Turn**: the right to close in and attack, held as attack tokens (the kind's cost) from one
+  pool; free tokens go to the waiting enemy nearest the hero. An enemy without a turn waits at its
+  spot on its own side.
 - **Wave tuning**: the new values in FR-017, in the same tuning data file as before.
 - **Actions** (extended): new `debug_spawn_brute` (F7) and `debug_next_wave` (F8).
 
@@ -375,8 +391,9 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
   every time, and every blow on it outside an attack pushes it a shorter distance and stuns it for
   less time than the same blow on a grunt. In 10 blows landed during a brute's wind-up with the
   hero staying in reach, 10 of its strikes still come.
-- **SC-004**: Over 60 seconds with six enemies in play and the attacker limit at 2, no more than 2
-  are ever closing in or attacking at once, and every freed turn is taken by a waiting enemy.
+- **SC-004**: Over 60 seconds with six grunts in play and a pool of 2 tokens, no more than 2 are
+  ever closing in or attacking at once, and every freed turn is taken by the waiting grunt nearest
+  the hero; with a brute (cost 2) attacking, no grunt closes in.
 - **SC-005**: Over the same 60 seconds, no two enemies are ever drawn fully over one another while
   approaching or waiting.
 - **SC-006**: Every kill raises the score by exactly the enemy's points; Game Over shows the same
@@ -407,13 +424,14 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
   brute every so many waves, both from the data; the plan may pick another rule shape as long as it
   is set in the data and never shrinks a wave.
 - **On-screen maximum** (clarified, FR-004a): it starts at 10, the number checked in SC-010. It is
-  a performance guard, not a difficulty tool; the attacker limit sets how hard a wave feels.
-- **Banner**: shown for about 1.5 s at the top centre of the play area, not blocking play.
-  Enemies start entering while it shows.
+  a performance guard, not a difficulty tool; the attack tokens set how hard a wave feels.
+- **Banner** (planning answer): shown for about 1.5 s at the top centre of the play area, not
+  blocking play; the wave's enemies start entering when it ends.
 - **Starting values** (data, not requirements; the owner retunes them): waves 1–3 of 2, 3 and 4
   grunts, brutes from wave 4 (wave 4: 3 grunts and 1 brute; wave 5: 4 grunts and 1 brute); past
   that, one more grunt per wave and one more brute every 3 waves; breather about 2 s; entry interval
-  about 0.6 s; attacker limit 2; waiting distance about 180 px; drift speed about 40 px/s; grunt
+  about 0.6 s; a pool of 2 attack tokens, grunt cost 1, brute cost 2; waiting distance about
+  180 px; separation distance about 56 px; drift speed about 40 px/s; grunt
   10 points, brute 30 points. Brute: health about 120 (12 hero blows), damage 35, walk speeds about
   two thirds of a grunt's, wind-up about 0.7 s, active about 0.12 s, recovery about 0.6 s, reach
   about 75 px, body about 1.4 times a grunt's, knockback taken about a quarter of a grunt's,
