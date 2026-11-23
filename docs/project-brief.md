@@ -1,6 +1,6 @@
 # Beastrider: Project Brief and Milestone Plan
 
-As of 2026-11-21. Status: M0, M1, M2a (debug overlay) and M2b (hit and feel) done and merged into main (the owner is working through Spec Kit milestone by milestone, one branch each); M3 (first fight) is next. Constitution v1.3.3. The live, editable copy is the doc "Beastrider: Project Brief and Milestone Plan"; this file is the project's shared-memory copy. If the two differ, ask the user which is current. The Spec Kit constitution is in `.specify/memory/constitution.md`.
+As of 2026-11-23. Status: M0, M1, M2a (debug overlay), M2b (hit and feel) and M3 (first fight) done and merged into main (the owner is working through Spec Kit milestone by milestone, one branch each); M4 is split into M4a and M4b, and M4a (waves and the brute) is next. Constitution v1.3.3. The live, editable copy is the doc "Beastrider: Project Brief and Milestone Plan"; this file is the project's shared-memory copy. If the two differ, ask the user which is current. The Spec Kit constitution is in `.specify/memory/constitution.md`.
 
 ## Summary
 
@@ -32,7 +32,7 @@ First slice, "Ashen Stand": one hero on one screen under a red sky, fighting esc
 
 ## Must-have for the first slice
 
-- Hero moving in four directions inside lane bounds, with attack, jump and one magic spell.
+- Hero moving in four directions inside lane bounds, with attack and one magic spell. Jump is deferred until after the first slice.
 - Two enemy types: a grunt (walks to you and strikes) and a brute (slower, hits harder, takes more blows).
 - Hit feedback: brief freeze on impact, knockback, white flash, small screen shake.
 - Escalating waves until the hero dies, with a score at game over.
@@ -40,7 +40,7 @@ First slice, "Ashen Stand": one hero on one screen under a red sky, fighting esc
 - Restart key returning to wave one in under two seconds.
 - Placeholder art only (coloured shapes) until the loop is fun.
 - All tuning values (damage, speed, health, wave sizes) in data files.
-- Debug overlay (F1) with live tuning reload (F5); cheats arrive with what they act on: show hitboxes and spawn an enemy (M2b), refill health (M3), refill magic (M4).
+- Debug overlay (F1) with live tuning reload (F5); cheats arrive with what they act on: show hitboxes and spawn an enemy (M2b), refill health (M3), refill magic (M4b).
 - Version control from the first session, and a player index in the code instead of a hard-coded "the player", so co-op stays possible.
 
 ## Later list (roughly in order)
@@ -88,7 +88,8 @@ First slice, "Ashen Stand": one hero on one screen under a red sky, fighting esc
 | M2a Debug overlay | F1 overlay with FPS, hero position, speeds, lane-limit lines and origin marker; F5 reloads tuning data live | Editing a speed and pressing F5 changes the hero with no restart; a bad value is rejected with a clear message; absent from release builds |
 | M2b Hit and feel | A still dummy enemy you can hit; show-hitboxes and spawn-dummy cheats | A hit gives knockback, flash, impact freeze and shake, all tunable from a data file |
 | M3 First fight | A chasing grunt, health bars, death, game over, restart, refill-health cheat | Play from start to game over and restart in under two seconds |
-| M4 Ashen Stand | Waves, the brute, potion drops, the magic spell, refill-magic cheat | Five-minute playtest is fun enough to replay three times; go or no-go decision |
+| M4a Waves and the brute | Escalating waves, the brute, a score at game over | Waves grow harder until the hero dies; the brute reads as slower, harder-hitting and tougher than the grunt; restart returns to wave one in under two seconds |
+| M4b Ashen Stand | Potion drops, magic meter, the magic spell, refill-magic cheat | Five-minute playtest is fun enough to replay three times; go or no-go decision |
 | M5 The look | Red sky, lighting, vignette, first cutout-animated hero | Mood reads in a screenshot; still 60 fps on the UHD 630 |
 | M6 The stage | Scrolling level with locked encounter zones and a boss | Finish a full stage from the left edge to the boss |
 | M7 Local co-op | A second player on the same machine | Two players complete a full stage without input or camera problems |
