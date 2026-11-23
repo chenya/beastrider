@@ -31,6 +31,14 @@ acceptance checks and out-of-scope list as given by the owner in the `/speckit-s
   briefly. A brute's strike has to be dodged, not out-swung.
 - Q: Does the hero's health come back between waves? → A: No. Health carries over for the whole
   run; nothing heals the hero in M4a except the F4 cheat. Healing arrives with potions in M4b.
+- Q: Should there be a limit on how many enemies are in play at once, with the rest of a wave
+  waiting off screen until others die? → A: Yes. A tuned on-screen maximum (starting at 10): a
+  wave's extra enemies enter as others die, and the wave clears only when all of them are dead.
+- Q: When an attacker's turn is freed, which waiting enemy should get it? → A: The one that has
+  waited longest (first come, first served).
+- Q: While waiting for a turn, should an enemy just hold its spot at the waiting distance, or keep
+  moving around the hero? → A: It drifts slowly around the hero at the waiting distance, changing
+  depth and side, at a tuned drift speed; a drift speed of 0 makes it hold still.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -97,7 +105,7 @@ grunt; let it strike and compare the health lost; watch its wind-up and how far 
 ### User Story 3 - Enemies take turns (Priority: P1)
 
 With several enemies in play, only a limited number (set in the data) close in and attack at one
-time. The others hold back at a waiting distance from the hero, moving to keep that distance, and
+time. The others hold back at a waiting distance from the hero, drifting slowly around it, and
 each takes a turn when an attacker finishes its attack or dies. Enemies do not stack into one
 overlapping shape, whether approaching or waiting.
 
@@ -113,9 +121,10 @@ moves in. Watch the waiting ones: none sits inside another.
 1. **Given** more enemies in play than the attacker limit, **When** they hunt the hero, **Then** no
    more than the limit are closing in or attacking at any moment.
 2. **Given** an enemy without a turn, **Then** it stays at about the waiting distance from the
-   hero, never starts an attack, and keeps facing the hero.
+   hero, drifts slowly around it (changing depth and side) at the drift speed, never starts an
+   attack, and keeps facing the hero.
 3. **Given** an attacker finishes its attack's recovery, is stunned or dies, **Then** its turn is
-   freed and a waiting enemy takes it.
+   freed and the enemy that has waited longest takes it.
 4. **Given** several enemies approaching or waiting, **Then** no two of them overlap into one
    shape; they spread out while keeping depth order.
 
@@ -151,9 +160,9 @@ best still shows the higher one.
 ### User Story 5 - Tune the waves live, and cheat (Priority: P2)
 
 The owner keeps the game running, changes the wave make-up, the escalation rule, the breather time,
-the brute's values, the attacker limit, the waiting distance or the points per enemy in the tuning
-data, saves and presses F5; the change applies live. F3 spawns a grunt, F7 a brute, and F8 ends the
-current wave and starts the next.
+the brute's values, the attacker limit, the waiting distance, the drift speed or the points per
+enemy in the tuning data, saves and presses F5; the change applies live. F3 spawns a grunt, F7 a
+brute, and F8 ends the current wave and starts the next.
 
 **Why this priority**: The difficulty curve is found by trying numbers (Principle IV), and the
 cheats make each wave easy to reach (Principle VIII). P2 because waves, the brute, turns and the
@@ -242,7 +251,7 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
 - **Enemies at a screen edge or lane limit**: they keep apart within the limits; when there is no
   room, they may touch but do not sit fully inside one another.
 - **Very late waves** (for example after F8 many times): the run keeps going; enemies above the
-  on-screen maximum wait off screen and enter as others die (see Assumptions).
+  on-screen maximum wait off screen and enter as others die (FR-004a).
 - **Training dummies** (F6): enemies ignore them; they never take turns, score or count as kills.
 - **R pressed during a banner, a breather, a fade or a freeze**: the fresh run starts anyway at wave
   1; nothing from the old run carries over except the session best.
@@ -263,8 +272,11 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
 - **FR-003**: Each wave written in the tuning data MUST bring exactly the number of grunts and
   brutes the data gives for it.
 - **FR-004**: The next wave MUST start only when no enemy of the current wave is alive (entering
-  ones count as alive, dying ones do not) and the breather time, counted from the last death, has
-  passed.
+  ones count as alive, dying ones do not), none is still waiting to enter, and the breather time,
+  counted from the last death, has passed.
+- **FR-004a**: No more than the on-screen maximum (from the data) of enemies MUST be in play at
+  once, dying ones not counted. A wave's enemies beyond it MUST wait off screen and enter, one at a
+  time, as others die. F3 and F7 enemies count towards the maximum and wait like any other.
 - **FR-005**: Every wave after the last one written in the data MUST be built by an escalation rule
   in the data that adds grunts and brutes as the wave number rises, so that no later wave has fewer
   enemies than the one before and the run never runs out of waves.
@@ -283,10 +295,14 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
   attack timing, knockback and hit resolution, with only its own values and its look being new; its
   behaviour MUST NOT be a copy of the grunt's.
 - **FR-010**: No more than the attacker limit (from the data) of enemies MUST be closing in or
-  attacking at one time. Every other enemy MUST hold at about the waiting distance (from the data)
-  from the hero, keep facing it, and never start an attack.
+  attacking at one time. Every other enemy MUST stay at about the waiting distance (from the data)
+  from the hero, drift around it at the drift speed (from the data), changing depth and side within
+  the lane and screen, keep facing it, and never start an attack. A drift speed of 0 MUST make it
+  hold still at the waiting distance.
 - **FR-011**: A turn MUST be freed when its enemy finishes its attack's recovery, is stunned, or
-  dies, and MUST then pass to a waiting enemy. Grunts and brutes MUST share one attacker limit.
+  dies, and MUST then pass to the waiting enemy that has waited longest. An enemy starts waiting
+  when it is in play without a turn, and an enemy whose turn ends goes to the back of the line.
+  Grunts and brutes MUST share one attacker limit and one line.
 - **FR-012**: Enemies approaching or waiting MUST keep apart so that no two overlap into one shape,
   while staying in the lane and on screen and keeping depth order.
 - **FR-013**: Each kill MUST add the dead enemy's points (grunt points or brute points, from the
@@ -300,15 +316,17 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
   removing every enemy and dummy, resetting score, kills, wave and the hit counter and keeping the
   session best, within two seconds of the press, in debug and release builds.
 - **FR-017**: The wave list (grunts and brutes per wave), the escalation rule, the breather time,
-  the banner time, the time between enemies entering, every brute value in FR-007, the attacker
-  limit, the waiting distance and the points per grunt and per brute MUST be read from the tuning
-  data file, checked like the earlier values, and none may appear as a literal value in code. F5
+  the banner time, the time between enemies entering, the on-screen maximum, every brute value in
+  FR-007, the attacker limit, the waiting distance, the drift speed and the points per grunt and per
+  brute MUST be read from the tuning data file, checked like the earlier values, and none may
+  appear as a literal value in code. F5
   MUST apply them with the M2a reload rules (all or nothing): a changed wave list or escalation
   rule applies from the next wave to start; enemy values from the next moment they are used, as in
   M3; the attacker limit as turns are next handed out; points from the next kill.
-- **FR-018**: Health, damage, walk speeds, active time, reach, the attacker limit, the points and
-  the waiting distance MUST be greater than 0; the wave list MUST hold at least one wave, and each
-  wave at least one enemy; every other new value MAY be 0, and no value may be negative.
+- **FR-018**: Health, damage, walk speeds, active time, reach, the attacker limit, the on-screen
+  maximum, the points and the waiting distance MUST be greater than 0; the wave list MUST hold at
+  least one wave, and each wave at least one enemy; every other new value (the drift speed
+  included) MAY be 0, and no value may be negative.
 - **FR-019**: F3 MUST spawn one more grunt and F7 one more brute, each entering from a random edge
   like a wave's enemy and joining the current wave. F8 MUST remove every enemy in play with no
   points or kills and start the next wave at once, skipping any breather. Each MUST use a named
@@ -338,8 +356,8 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
   past its end, from the escalation rule.
 - **Brute**: an enemy like the grunt, with its own values and look: bigger, slower, tougher,
   harder-hitting, longer wind-up, less knockback and stun taken.
-- **Turn**: the right to close in and attack. At most the attacker limit are held at once; an
-  enemy without one waits at the waiting distance.
+- **Turn**: the right to close in and attack. At most the attacker limit are held at once, handed
+  out first come, first served; an enemy without one drifts at the waiting distance.
 - **Wave tuning**: the new values in FR-017, in the same tuning data file as before.
 - **Actions** (extended): new `debug_spawn_brute` (F7) and `debug_next_wave` (F8).
 
@@ -388,20 +406,18 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
 - **The escalation rule** adds a fixed number of grunts per wave past the last written one, and a
   brute every so many waves, both from the data; the plan may pick another rule shape as long as it
   is set in the data and never shrinks a wave.
-- **On-screen maximum**: so late waves cannot drop the frame rate, at most a tuned number of
-  enemies (starting at 10, the number checked in SC-010) are in play at once; the rest of a wave
-  enter as others die. This is a performance guard, not a difficulty tool.
-- **Who gets a freed turn**: the waiting enemy that has waited longest; the plan may choose another
-  fair rule.
+- **On-screen maximum** (clarified, FR-004a): it starts at 10, the number checked in SC-010. It is
+  a performance guard, not a difficulty tool; the attacker limit sets how hard a wave feels.
 - **Banner**: shown for about 1.5 s at the top centre of the play area, not blocking play.
   Enemies start entering while it shows.
 - **Starting values** (data, not requirements; the owner retunes them): waves 1–3 of 2, 3 and 4
   grunts, brutes from wave 4 (wave 4: 3 grunts and 1 brute; wave 5: 4 grunts and 1 brute); past
   that, one more grunt per wave and one more brute every 3 waves; breather about 2 s; entry interval
-  about 0.6 s; attacker limit 2; waiting distance about 180 px; grunt 10 points, brute 30 points.
-  Brute: health about 120 (12 hero blows), damage 35, walk speeds about two thirds of a grunt's,
-  wind-up about 0.7 s, active about 0.12 s, recovery about 0.6 s, reach about 75 px, body about 1.4
-  times a grunt's, knockback taken about a quarter of a grunt's, hit-stun taken about 0.1 s.
+  about 0.6 s; attacker limit 2; waiting distance about 180 px; drift speed about 40 px/s; grunt
+  10 points, brute 30 points. Brute: health about 120 (12 hero blows), damage 35, walk speeds about
+  two thirds of a grunt's, wind-up about 0.7 s, active about 0.12 s, recovery about 0.6 s, reach
+  about 75 px, body about 1.4 times a grunt's, knockback taken about a quarter of a grunt's,
+  hit-stun taken about 0.1 s.
 - **The M3 respawn delay** is retired with the respawn rule; the breather takes its place.
 - **Kill count** stays on the HUD beside the score and on Game Over.
 - **The M2b hit counter** stays a debug panel line and resets with R.
