@@ -132,7 +132,7 @@ during planning (see [plan.md, Spec and input alignment](plan.md#spec-and-input-
 
     | From | Condition | To | Spawn |
     | --- | --- | --- | --- |
-    | `Banner` | countdown ends | `Fighting`, queue filled, timer 0 | — |
+    | `Banner` | countdown ends | `Fighting`, the wave's queue added after any F3/F7 kinds, timer 0 | — |
     | `Fighting` | queue not empty, timer ran out, `living < max_on_screen` | same, timer = `spawn_interval` | front of queue |
     | `Fighting` | queue empty and `living == 0` | `Breather(breather_time)`; `wave_cleared(n)` | — |
     | `Breather` | `living > 0` (F3/F7) | `Fighting` (same wave, empty queue) | — |
@@ -202,7 +202,8 @@ during planning (see [plan.md, Spec and input alignment](plan.md#spec-and-input-
 ## R12. Debug cheats
 
 - **Decision**: `debug_spawn_brute` (F7) and `debug_next_wave` (F8), new actions. F3 and F7 call
-  `WaveDirector.spawn_now(kind)`: one enemy joins the current wave, entering at once if the
+  `WaveDirector.spawn_grunt()` / `spawn_brute()` (a Rust-side `spawn_now(kind)` behind both, so
+  GDScript never handles the kind): one enemy joins the current wave, entering at once if the
   on-screen maximum allows, else first in the queue. F8 calls `WaveDirector.skip_wave()`: every
   enemy of the director is freed without points or kills, the queue is emptied, and the next wave's
   banner starts at once (owner's planning answer). All three do nothing at Game Over. The overlay's

@@ -36,7 +36,7 @@ Placed only by `WaveDirector`. Never give the root a script (M2b lesson); script
 | `wave_cleared(number: int)` | signal | The last enemy of a fully spawned wave died; the breather starts. |
 | `wave() -> int` | func | The current wave number (1 from the start). |
 | `banner_wave() -> int` | func | The wave number while its banner shows, else 0. For the banner. |
-| `spawn_now(kind: EnemyKind)` | func | F3/F7: one more enemy of `kind` joins the current wave. Nothing at Game Over. |
+| `spawn_grunt()`, `spawn_brute()` | func | F3/F7: one more grunt or brute joins the current wave (Rust-side `spawn_now(kind)` behind both). Nothing at Game Over. |
 | `skip_wave()` | func | F8: every enemy removed with no points or kills, queue emptied, next wave's banner at once. Nothing at Game Over. |
 
 Runs after the enemies each physics frame (`process_physics_priority = 1`, placed after `World`),
@@ -90,6 +90,6 @@ every `TrainingDummy`).
 | `ui/game_over.gd` | `Run.game_over(kills, score, wave, best)` | score, wave reached, kills, best, "Press R to restart" |
 | `world/enemy_body.gd` | `Enemy.is_winding_up()`, `died` | wind-up colour, fade (was `grunt_body.gd`) |
 | `world/enemy_health_bar.gd` | `Enemy.health()`, `max_health()` | bar above the head (was `grunt_health_bar.gd`) |
-| `debug/debug_overlay.gd` | — | F3/F7 → `director.spawn_now(kind)`, F8 → `director.skip_wave()` |
+| `debug/debug_overlay.gd` | — | F3 → `director.spawn_grunt()`, F7 → `director.spawn_brute()`, F8 → `director.skip_wave()` |
 | `debug/debug_hitboxes.gd` | `Enemy.hurtbox()`, `attack_box()` | outlines for both kinds |
 | `world/screen_shake.gd` | `Enemy.was_hit` | shake for any enemy (was `Grunt`) |

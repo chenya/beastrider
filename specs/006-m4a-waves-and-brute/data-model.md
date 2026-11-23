@@ -125,7 +125,7 @@ at index `round((i + 1) · t / (b + 1)) − 1`, grunts elsewhere, in order.
 | From | Condition | To | Event |
 | --- | --- | --- | --- |
 | any | not `ready` | unchanged | `None` |
-| `Banner` | countdown ends | `Fighting`, `queue = spawn_queue(composition(n))`, timer 0 | `None` |
+| `Banner` | countdown ends | `Fighting`, `queue = queue + spawn_queue(composition(n))` (kinds pushed during the banner stay first), timer 0 | `None` |
 | `Fighting` | queue not empty, timer out, `living < max_on_screen` | same, timer = `spawn_interval`, front popped | `Spawn(kind)` |
 | `Fighting` | queue empty, `living == 0` | `Breather(breather_time)` | `Cleared(n)` |
 | `Breather` | `living > 0` | `Fighting` (same `n`, empty queue) | `None` |
