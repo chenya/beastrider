@@ -88,8 +88,8 @@ First slice, "Ashen Stand": one hero on one screen under a red sky, fighting esc
 | M2a Debug overlay | F1 overlay with FPS, hero position, speeds, lane-limit lines and origin marker; F5 reloads tuning data live | Editing a speed and pressing F5 changes the hero with no restart; a bad value is rejected with a clear message; absent from release builds |
 | M2b Hit and feel | A still dummy enemy you can hit; show-hitboxes and spawn-dummy cheats | A hit gives knockback, flash, impact freeze and shake, all tunable from a data file |
 | M3 First fight | A chasing grunt, health bars, death, game over, restart, refill-health cheat | Play from start to game over and restart in under two seconds |
-| M4a Waves and the brute | Escalating waves, the brute, a score at game over | Waves grow harder until the hero dies; the brute reads as slower, harder-hitting and tougher than the grunt; restart returns to wave one in under two seconds |
-| M4b Ashen Stand | Potion drops, magic meter, the magic spell, refill-magic cheat | Five-minute playtest is fun enough to replay three times; go or no-go decision |
+| M4a Waves and the brute | Escalating waves, the brute, an attacker limit and a score | Five runs rise in difficulty and end in deaths that felt earned |
+| M4b Ashen Stand | Potion drops, the magic meter and spell, the refill-magic cheat | A five-minute playtest of the whole slice is fun enough to replay three times; go or no-go decision |
 | M5 The look | Red sky, lighting, vignette, first cutout-animated hero | Mood reads in a screenshot; still 60 fps on the UHD 630 |
 | M6 The stage | Scrolling level with locked encounter zones and a boss | Finish a full stage from the left edge to the boss |
 | M7 Local co-op | A second player on the same machine | Two players complete a full stage without input or camera problems |
