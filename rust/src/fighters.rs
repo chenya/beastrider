@@ -1,14 +1,14 @@
 //! Reaching any fighter in the scene, whatever its class, through one enum.
 //!
-//! An attack must find and hit heroes, grunts and training dummies, which are different Rust
+//! An attack must find and hit heroes, enemies and training dummies, which are different Rust
 //! classes. Every use is an exhaustive `match` on [`FighterRef`], so a new fighter class is a
 //! compile error until each place handles it (constitution, "types over strings").
 
 use godot::classes::{Node, SceneTree};
 use godot::prelude::*;
 
+use crate::enemy::Enemy;
 use crate::fighter::{Hit, Target, Team};
-use crate::grunt::Grunt;
 use crate::hero::Hero;
 use crate::training_dummy::TrainingDummy;
 
@@ -16,8 +16,8 @@ use crate::training_dummy::TrainingDummy;
 pub enum FighterRef {
     /// A player's hero.
     Hero(Gd<Hero>),
-    /// A grunt.
-    Grunt(Gd<Grunt>),
+    /// An enemy of any kind.
+    Enemy(Gd<Enemy>),
     /// A training dummy.
     Dummy(Gd<TrainingDummy>),
 }
@@ -29,8 +29,8 @@ impl FighterRef {
             Ok(hero) => return Some(Self::Hero(hero)),
             Err(node) => node,
         };
-        let node = match node.try_cast::<Grunt>() {
-            Ok(grunt) => return Some(Self::Grunt(grunt)),
+        let node = match node.try_cast::<Enemy>() {
+            Ok(enemy) => return Some(Self::Enemy(enemy)),
             Err(node) => node,
         };
         node.try_cast::<TrainingDummy>().ok().map(Self::Dummy)
@@ -49,7 +49,7 @@ impl FighterRef {
     pub fn id(&self) -> InstanceId {
         match self {
             Self::Hero(hero) => hero.instance_id(),
-            Self::Grunt(grunt) => grunt.instance_id(),
+            Self::Enemy(enemy) => enemy.instance_id(),
             Self::Dummy(dummy) => dummy.instance_id(),
         }
     }
@@ -59,7 +59,7 @@ impl FighterRef {
     pub fn target(&self) -> Option<Target<InstanceId>> {
         match self {
             Self::Hero(hero) => hero.bind().target(),
-            Self::Grunt(grunt) => grunt.bind().target(),
+            Self::Enemy(enemy) => enemy.bind().target(),
             Self::Dummy(dummy) => dummy.bind().target(),
         }
     }
@@ -68,7 +68,7 @@ impl FighterRef {
     pub fn take_hit(&mut self, hit: &Hit<InstanceId>) {
         match self {
             Self::Hero(hero) => hero.bind_mut().take_hit(hit),
-            Self::Grunt(grunt) => grunt.bind_mut().take_hit(hit),
+            Self::Enemy(enemy) => enemy.bind_mut().take_hit(hit),
             Self::Dummy(dummy) => dummy.bind_mut().take_hit(hit),
         }
     }

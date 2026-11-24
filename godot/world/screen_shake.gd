@@ -1,5 +1,5 @@
 extends Camera2D
-## Shakes the play area when any fighter is hit: the hero, a grunt or a training dummy.
+## Shakes the play area when any fighter is hit: the hero, an enemy or a training dummy.
 ##
 ## Presentation only: it listens to [code]was_hit[/code] on every fighter that enters the tree,
 ## including ones spawned later, and reads the shake strength and length from the
@@ -29,8 +29,8 @@ func _process(delta: float) -> void:
 func _on_node_added(node: Node) -> void:
 	if node is Hero:
 		(node as Hero).was_hit.connect(_on_was_hit)
-	elif node is Grunt:
-		(node as Grunt).was_hit.connect(_on_was_hit)
+	elif node is Enemy:
+		(node as Enemy).was_hit.connect(_on_was_hit)
 	elif node is TrainingDummy:
 		(node as TrainingDummy).was_hit.connect(_on_was_hit)
 

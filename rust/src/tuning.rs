@@ -5,10 +5,13 @@
 //! ([`read_raw_tuning`]) is kept apart from checking it ([`validate`]), so the rules are plain
 //! functions tested without the engine. The current values are held by
 //! [`TuningStore`](crate::tuning_store::TuningStore). The file format is described in
-//! `specs/005-m3-first-fight/contracts/tuning-data.md`.
+//! `specs/006-m4a-waves-and-brute/contracts/tuning-data.md`.
 //!
-//! The hero and the grunt use the same key names, each in its own section with a nested `attack`
-//! object, and one reader handles both, so the two fighters' values cannot drift apart.
+//! The hero and every enemy kind use the same key names, each in its own section with a nested
+//! `attack` object, and one reader handles them all, so their values cannot drift apart. The wave
+//! list is the one value that is not a fixed set of numbers, so it is checked into its own
+//! [`WaveTuning`]; everything else stays in the `Copy` [`TuningValues`] that fighters read every
+//! tick.
 
 use std::fmt;
 
@@ -18,26 +21,32 @@ use godot::global::Error as GodotError;
 use godot::prelude::*;
 use godot::tools::GFile;
 
+use crate::enemy::EnemyKind;
+
 /// Godot path of the tuning data file. This is a file location, not a tuning value.
 pub const TUNING_PATH: &str = "res://data/tuning.json";
 
 /// Section holding the hero: its movement, health, hurtbox, stun, invulnerability and attack.
 const HERO_SECTION: &str = "hero";
-/// Section holding the grunt, with the same keys as the hero except invulnerability.
-const GRUNT_SECTION: &str = "grunt";
+/// Section holding one section per enemy kind.
+const ENEMIES_SECTION: &str = "enemies";
 /// Section holding the training dummy's hurtbox.
 const DUMMY_SECTION: &str = "dummy";
 /// Section holding the lane's limits and the depth tolerance shared by every attacker.
 const LANE_SECTION: &str = "lane";
 /// Section holding the hit effects shared by every blow: freeze, flash and shake.
 const EFFECTS_SECTION: &str = "effects";
-/// Section holding the run's pacing: respawn delay and death fade.
+/// Section holding the run's pacing: the death fade.
 const RUN_SECTION: &str = "run";
+/// Section holding the wave list and how waves grow, enter and pause.
+const WAVES_SECTION: &str = "waves";
+/// Section holding how a crowd of enemies takes turns and keeps apart.
+const CROWD_SECTION: &str = "crowd";
 
 /// Key of the attack object nested in each fighter's section.
 const ATTACK_KEY: &str = "attack";
 
-/// Keys inside a fighter's section.
+/// Keys inside a fighter's section (the hero's or an enemy kind's).
 const HORIZONTAL_SPEED_KEY: &str = "horizontal_speed";
 const VERTICAL_SPEED_KEY: &str = "vertical_speed";
 const MAX_HEALTH_KEY: &str = "max_health";
@@ -45,6 +54,12 @@ const HURTBOX_WIDTH_KEY: &str = "hurtbox_width";
 const HURTBOX_HEIGHT_KEY: &str = "hurtbox_height";
 const HIT_STUN_TIME_KEY: &str = "hit_stun_time";
 const INVULNERABILITY_TIME_KEY: &str = "invulnerability_time";
+
+/// Keys only an enemy kind's section has.
+const KNOCKBACK_RESISTANCE_KEY: &str = "knockback_resistance";
+const INTERRUPTIBLE_KEY: &str = "interruptible";
+const ATTACK_TOKEN_COST_KEY: &str = "attack_token_cost";
+const POINTS_KEY: &str = "points";
 
 /// Keys inside a fighter's `attack` object.
 const WIND_UP_TIME_KEY: &str = "wind_up_time";
@@ -68,8 +83,25 @@ const SHAKE_STRENGTH_KEY: &str = "shake_strength";
 const SHAKE_TIME_KEY: &str = "shake_time";
 
 /// Keys inside [`RUN_SECTION`].
-const RESPAWN_DELAY_KEY: &str = "respawn_delay";
 const DEATH_FADE_TIME_KEY: &str = "death_fade_time";
+
+/// Keys inside [`WAVES_SECTION`] and its list entries.
+const LIST_KEY: &str = "list";
+const GRUNTS_KEY: &str = "grunts";
+const BRUTES_KEY: &str = "brutes";
+const EXTRA_GRUNTS_PER_WAVE_KEY: &str = "extra_grunts_per_wave";
+const BRUTE_EVERY_WAVES_KEY: &str = "brute_every_waves";
+const SPAWN_INTERVAL_KEY: &str = "spawn_interval";
+const BREATHER_TIME_KEY: &str = "breather_time";
+const BANNER_TIME_KEY: &str = "banner_time";
+const MAX_ON_SCREEN_KEY: &str = "max_on_screen";
+
+/// Keys inside [`CROWD_SECTION`].
+const MAX_ATTACK_TOKENS_KEY: &str = "max_attack_tokens";
+const WAITING_DISTANCE_KEY: &str = "waiting_distance";
+const DRIFT_SPEED_KEY: &str = "drift_speed";
+const SEPARATION_RADIUS_KEY: &str = "separation_radius";
+const MAX_WAIT_TIME_KEY: &str = "max_wait_time";
 
 /// Why the tuning data could not be used. Every message names the file and the problem, and
 /// the field path where there is one, so the owner can fix the file without reading code.
@@ -168,7 +200,7 @@ pub struct RawAttack {
     pub knockback_time: f64,
 }
 
-/// One fighter's section as read from the file, before any rule is applied.
+/// The keys the hero and every enemy kind share, as read from the file.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RawFighter {
     /// `horizontal_speed`, in pixels per second.
@@ -187,16 +219,94 @@ pub struct RawFighter {
     pub attack: RawAttack,
 }
 
-/// Every tuning number as read from the file, before any rule is applied. Only [`validate`]
-/// turns them into values the game may use.
+/// A value that must be `true` or `false`, as read from the file.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RawFlag {
+    /// A JSON boolean.
+    Bool(bool),
+    /// Anything else, as it reads in the file, so the rejection can show it.
+    NotBool(String),
+}
+
+/// One enemy kind's section (`enemies.grunt` or `enemies.brute`), as read from the file.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RawEnemy {
+    /// The keys shared with the hero.
+    pub fighter: RawFighter,
+    /// `knockback_resistance`, a fraction.
+    pub knockback_resistance: f64,
+    /// `interruptible`.
+    pub interruptible: RawFlag,
+    /// `attack_token_cost`, in tokens.
+    pub attack_token_cost: f64,
+    /// `points`, added to the score per kill.
+    pub points: f64,
+}
+
+/// One entry of `waves.list`, as read from the file.
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RawWave {
+    /// `grunts`.
+    pub grunts: f64,
+    /// `brutes`.
+    pub brutes: f64,
+}
+
+/// `waves.list` as read from the file.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RawList {
+    /// A JSON array of wave objects.
+    Entries(Vec<RawWave>),
+    /// Anything else, as it reads in the file, so the rejection can show it.
+    NotArray(String),
+}
+
+/// The `waves` section, as read from the file.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RawWaves {
+    /// `list`.
+    pub list: RawList,
+    /// `extra_grunts_per_wave`.
+    pub extra_grunts_per_wave: f64,
+    /// `brute_every_waves`.
+    pub brute_every_waves: f64,
+    /// `spawn_interval`, in seconds.
+    pub spawn_interval: f64,
+    /// `breather_time`, in seconds.
+    pub breather_time: f64,
+    /// `banner_time`, in seconds.
+    pub banner_time: f64,
+    /// `max_on_screen`.
+    pub max_on_screen: f64,
+}
+
+/// The `crowd` section, as read from the file.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RawCrowd {
+    /// `max_attack_tokens`.
+    pub max_attack_tokens: f64,
+    /// `waiting_distance`, in pixels.
+    pub waiting_distance: f64,
+    /// `drift_speed`, in pixels per second.
+    pub drift_speed: f64,
+    /// `separation_radius`, in pixels.
+    pub separation_radius: f64,
+    /// `max_wait_time`, in seconds.
+    pub max_wait_time: f64,
+}
+
+/// Every tuning value as read from the file, before any rule is applied. Only [`validate`]
+/// turns them into values the game may use.
+#[derive(Debug, Clone, PartialEq)]
 pub struct RawTuning {
     /// The `hero` section, without `invulnerability_time`.
     pub hero: RawFighter,
     /// `hero.invulnerability_time`, in seconds.
     pub invulnerability_time: f64,
-    /// The `grunt` section.
-    pub grunt: RawFighter,
+    /// The `enemies.grunt` section.
+    pub grunt: RawEnemy,
+    /// The `enemies.brute` section.
+    pub brute: RawEnemy,
     /// `dummy.hurtbox_width`, in pixels.
     pub dummy_hurtbox_width: f64,
     /// `dummy.hurtbox_height`, in pixels above the feet.
@@ -215,10 +325,12 @@ pub struct RawTuning {
     pub shake_strength: f64,
     /// `effects.shake_time`, in seconds.
     pub shake_time: f64,
-    /// `run.respawn_delay`, in seconds.
-    pub respawn_delay: f64,
     /// `run.death_fade_time`, in seconds.
     pub death_fade_time: f64,
+    /// The `waves` section.
+    pub waves: RawWaves,
+    /// The `crowd` section.
+    pub crowd: RawCrowd,
 }
 
 /// Declares a small `Copy` group of checked `f32` tuning values with one accessor per value.
@@ -243,7 +355,7 @@ macro_rules! value_group {
 }
 
 value_group! {
-    /// One fighter's attack (the `attack` object of `hero` or `grunt`).
+    /// One fighter's attack (the `attack` object of `hero` or an enemy kind).
     AttackTuning {
         /// Seconds from the start of the attack until the blow can land.
         wind_up_time,
@@ -291,14 +403,12 @@ value_group! {
 value_group! {
     /// The run's pacing (`run` section).
     RunTuning {
-        /// Seconds between the last grunt dying and a new one entering.
-        respawn_delay,
-        /// Seconds a dying grunt takes to fade out before it is removed.
+        /// Seconds a dying enemy takes to fade out before it is removed.
         death_fade_time,
     }
 }
 
-/// One fighter's checked values (the `hero` or `grunt` section).
+/// The hero's checked values (the `hero` section, without invulnerability).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FighterTuning {
     horizontal_speed: f32,
@@ -347,19 +457,128 @@ impl FighterTuning {
     }
 }
 
-/// Every checked tuning value. It can only be built by [`validate`], so an instance always holds
-/// values that passed every rule.
+/// One enemy kind's checked values (`enemies.grunt` or `enemies.brute`). Both kinds have exactly
+/// the same fields, so behaviour code never needs to know which kind it is reading.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EnemyTuning {
+    fighter: FighterTuning,
+    knockback_resistance: f32,
+    interruptible: bool,
+    attack_token_cost: u32,
+    points: i64,
+}
+
+impl EnemyTuning {
+    /// Speed along the lane, in pixels per second; always above 0.
+    pub fn horizontal_speed(&self) -> f32 {
+        self.fighter.horizontal_speed
+    }
+
+    /// Speed into and out of the lane, in pixels per second; always above 0.
+    pub fn vertical_speed(&self) -> f32 {
+        self.fighter.vertical_speed
+    }
+
+    /// Health when full, in health points; always above 0.
+    pub fn max_health(&self) -> f32 {
+        self.fighter.max_health
+    }
+
+    /// Width of the hurtbox, centred on the feet, in pixels; always above 0.
+    pub fn hurtbox_width(&self) -> f32 {
+        self.fighter.hurtbox_width
+    }
+
+    /// Height of the hurtbox above the feet, in pixels; always above 0.
+    pub fn hurtbox_height(&self) -> f32 {
+        self.fighter.hurtbox_height
+    }
+
+    /// Seconds a landed blow stuns this enemy, before its resistance is applied.
+    pub fn hit_stun_time(&self) -> f32 {
+        self.fighter.hit_stun_time
+    }
+
+    /// How much of a blow's push and stun it shrugs off, from 0 (none) to 1 (all).
+    pub fn knockback_resistance(&self) -> f32 {
+        self.knockback_resistance
+    }
+
+    /// Whether a blow during its attack stops the attack; false means its attacks are armored.
+    pub fn interruptible(&self) -> bool {
+        self.interruptible
+    }
+
+    /// Attack tokens it must hold to close in and attack; between 1 and the pool size.
+    pub fn attack_token_cost(&self) -> u32 {
+        self.attack_token_cost
+    }
+
+    /// Points its kill adds to the score; always above 0.
+    pub fn points(&self) -> i64 {
+        self.points
+    }
+
+    /// Its attack.
+    pub fn attack(&self) -> AttackTuning {
+        self.fighter.attack
+    }
+}
+
+/// How a crowd takes turns and keeps apart (`crowd` section).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CrowdTuning {
+    max_attack_tokens: u32,
+    waiting_distance: f32,
+    drift_speed: f32,
+    separation_radius: f32,
+    max_wait_time: f32,
+}
+
+impl CrowdTuning {
+    /// Size of the attack-token pool; at least 1.
+    pub fn max_attack_tokens(&self) -> u32 {
+        self.max_attack_tokens
+    }
+
+    /// How far from its target a waiting enemy's spot is, in pixels; always above 0.
+    pub fn waiting_distance(&self) -> f32 {
+        self.waiting_distance
+    }
+
+    /// How fast a waiting enemy drifts to its spot, in pixels per second; 0 holds it still.
+    pub fn drift_speed(&self) -> f32 {
+        self.drift_speed
+    }
+
+    /// How close two enemies may come before they are pushed apart, in pixels; 0 turns it off.
+    pub fn separation_radius(&self) -> f32 {
+        self.separation_radius
+    }
+
+    /// Seconds a waiting enemy may be passed over for nearer ones before it goes first; 0 means
+    /// turns go to the longest waiting.
+    pub fn max_wait_time(&self) -> f32 {
+        self.max_wait_time
+    }
+}
+
+/// Every checked tuning value but the wave list. It can only be built by [`validate`], so an
+/// instance always holds values that passed every rule. It is `Copy`, so fighters read it every
+/// tick without cloning.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TuningValues {
     hero: FighterTuning,
     invulnerability_time: f32,
-    grunt: FighterTuning,
+    grunt: EnemyTuning,
+    brute: EnemyTuning,
     dummy: DummyTuning,
     lane_top: f32,
     lane_bottom: f32,
     depth_tolerance: f32,
     effects: EffectsTuning,
     run: RunTuning,
+    crowd: CrowdTuning,
 }
 
 impl TuningValues {
@@ -373,9 +592,12 @@ impl TuningValues {
         self.invulnerability_time
     }
 
-    /// The grunt's values.
-    pub fn grunt(&self) -> FighterTuning {
-        self.grunt
+    /// The values of one enemy kind. This is the one place that chooses values by kind.
+    pub fn enemy(&self, kind: EnemyKind) -> EnemyTuning {
+        match kind {
+            EnemyKind::Grunt => self.grunt,
+            EnemyKind::Brute => self.brute,
+        }
     }
 
     /// The training dummy's hurtbox.
@@ -407,39 +629,155 @@ impl TuningValues {
     pub fn run(&self) -> RunTuning {
         self.run
     }
+
+    /// How a crowd takes turns and keeps apart.
+    pub fn crowd(&self) -> CrowdTuning {
+        self.crowd
+    }
+}
+
+/// How many grunts and brutes one wave brings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WaveSpec {
+    /// Grunts in the wave.
+    pub grunts: u32,
+    /// Brutes in the wave.
+    pub brutes: u32,
+}
+
+impl WaveSpec {
+    /// Enemies in the wave.
+    pub fn total(&self) -> u32 {
+        self.grunts + self.brutes
+    }
+}
+
+/// The checked `waves` section. Built only by [`validate`]; the list always holds at least one
+/// wave and every wave at least one enemy.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WaveTuning {
+    list: Vec<WaveSpec>,
+    extra_grunts_per_wave: u32,
+    brute_every_waves: u32,
+    spawn_interval: f32,
+    breather_time: f32,
+    banner_time: f32,
+    max_on_screen: u32,
+}
+
+impl WaveTuning {
+    /// Builds wave values directly, for unit tests elsewhere in the crate; the game only gets
+    /// them from [`validate`].
+    #[cfg(test)]
+    pub fn for_tests(
+        list: Vec<WaveSpec>,
+        extra_grunts_per_wave: u32,
+        brute_every_waves: u32,
+        timing: (f32, f32, f32),
+        max_on_screen: u32,
+    ) -> Self {
+        let (spawn_interval, breather_time, banner_time) = timing;
+        Self {
+            list,
+            extra_grunts_per_wave,
+            brute_every_waves,
+            spawn_interval,
+            breather_time,
+            banner_time,
+            max_on_screen,
+        }
+    }
+
+    /// The written waves, wave 1 first; never empty.
+    pub fn list(&self) -> &[WaveSpec] {
+        &self.list
+    }
+
+    /// Grunts each wave past the list adds.
+    pub fn extra_grunts_per_wave(&self) -> u32 {
+        self.extra_grunts_per_wave
+    }
+
+    /// Every how many waves past the list one more brute comes; 0 means no more brutes.
+    pub fn brute_every_waves(&self) -> u32 {
+        self.brute_every_waves
+    }
+
+    /// Seconds between two enemies of a wave entering.
+    pub fn spawn_interval(&self) -> f32 {
+        self.spawn_interval
+    }
+
+    /// Seconds of quiet between a wave's last death and the next banner.
+    pub fn breather_time(&self) -> f32 {
+        self.breather_time
+    }
+
+    /// Seconds a wave's banner shows before its enemies start entering.
+    pub fn banner_time(&self) -> f32 {
+        self.banner_time
+    }
+
+    /// The most enemies in play at once; at least 1.
+    pub fn max_on_screen(&self) -> u32 {
+        self.max_on_screen
+    }
 }
 
 /// A combination of values that is allowed but probably not meant. The values are still used;
 /// the warning is shown so a slip is not silent.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TuningWarning {
-    /// The grunt's wind-up is not longer than the hero's, so its attack may not be seen coming.
-    GruntWindUpNotLonger { hero: f32, grunt: f32 },
+    /// An enemy kind's wind-up is not longer than the hero's, so its attack may not be seen
+    /// coming.
+    EnemyWindUpNotLonger {
+        kind: EnemyKind,
+        hero: f32,
+        enemy: f32,
+    },
+    /// The brute's wind-up is not longer than the grunt's, so it does not telegraph its heavier
+    /// blow any better.
+    BruteWindUpNotLonger { grunt: f32, brute: f32 },
 }
 
 impl fmt::Display for TuningWarning {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::GruntWindUpNotLonger { hero, grunt } => write!(
+            Self::EnemyWindUpNotLonger { kind, hero, enemy } => write!(
                 f,
-                "{}: not longer than {} ({hero}), got {grunt}; the grunt's attack may not be seen \
+                "{}: not longer than {} ({hero}), got {enemy}; the {}'s attack may not be seen \
                  coming",
-                attack_path(GRUNT_SECTION, WIND_UP_TIME_KEY),
+                attack_path(&enemy_section(*kind), WIND_UP_TIME_KEY),
                 attack_path(HERO_SECTION, WIND_UP_TIME_KEY),
+                kind_key(*kind),
+            ),
+            Self::BruteWindUpNotLonger { grunt, brute } => write!(
+                f,
+                "{}: not longer than {} ({grunt}), got {brute}; the brute should telegraph longer \
+                 than the grunt",
+                attack_path(&enemy_section(EnemyKind::Brute), WIND_UP_TIME_KEY),
+                attack_path(&enemy_section(EnemyKind::Grunt), WIND_UP_TIME_KEY),
             ),
         }
     }
 }
 
-/// The warnings that apply to values that already passed [`validate`].
+/// The warnings that apply to values that already passed [`validate`], in a fixed order: each
+/// enemy kind against the hero, then the brute against the grunt.
 pub fn warnings(values: &TuningValues) -> Vec<TuningWarning> {
     let hero = values.hero.attack.wind_up_time;
-    let grunt = values.grunt.attack.wind_up_time;
-    if grunt <= hero {
-        vec![TuningWarning::GruntWindUpNotLonger { hero, grunt }]
-    } else {
-        Vec::new()
+    let grunt = values.grunt.fighter.attack.wind_up_time;
+    let brute = values.brute.fighter.attack.wind_up_time;
+    let mut found = Vec::new();
+    for (kind, enemy) in [(EnemyKind::Grunt, grunt), (EnemyKind::Brute, brute)] {
+        if enemy <= hero {
+            found.push(TuningWarning::EnemyWindUpNotLonger { kind, hero, enemy });
+        }
     }
+    if brute <= grunt {
+        found.push(TuningWarning::BruteWindUpNotLonger { grunt, brute });
+    }
+    found
 }
 
 /// Applies every tuning rule to `raw` and returns the values only if all of them pass, so a
@@ -447,15 +785,20 @@ pub fn warnings(values: &TuningValues) -> Vec<TuningWarning> {
 ///
 /// Start-up and reload both call this, so the same rules apply to both. Each value is converted
 /// to `f32` first, so a huge finite number that overflows is rejected too. The rules are listed in
-/// `specs/005-m3-first-fight/contracts/tuning-data.md`; they are applied in file order.
-pub fn validate(raw: &RawTuning, screen_height: f32) -> Result<TuningValues, TuningError> {
+/// `specs/006-m4a-waves-and-brute/contracts/tuning-data.md`; they are applied in file order, except
+/// that each enemy's token cost is compared with the pool once the `crowd` section has passed.
+pub fn validate(
+    raw: &RawTuning,
+    screen_height: f32,
+) -> Result<(TuningValues, WaveTuning), TuningError> {
     let hero = fighter(&raw.hero, HERO_SECTION)?;
     let invulnerability_time = non_negative(
         raw.invulnerability_time,
         HERO_SECTION,
         INVULNERABILITY_TIME_KEY,
     )?;
-    let grunt = fighter(&raw.grunt, GRUNT_SECTION)?;
+    let grunt = enemy(&raw.grunt, EnemyKind::Grunt)?;
+    let brute = enemy(&raw.brute, EnemyKind::Brute)?;
     let dummy = DummyTuning {
         hurtbox_width: positive(raw.dummy_hurtbox_width, DUMMY_SECTION, HURTBOX_WIDTH_KEY)?,
         hurtbox_height: positive(raw.dummy_hurtbox_height, DUMMY_SECTION, HURTBOX_HEIGHT_KEY)?,
@@ -500,23 +843,43 @@ pub fn validate(raw: &RawTuning, screen_height: f32) -> Result<TuningValues, Tun
         shake_time: non_negative(raw.shake_time, EFFECTS_SECTION, SHAKE_TIME_KEY)?,
     };
     let run = RunTuning {
-        respawn_delay: non_negative(raw.respawn_delay, RUN_SECTION, RESPAWN_DELAY_KEY)?,
         death_fade_time: non_negative(raw.death_fade_time, RUN_SECTION, DEATH_FADE_TIME_KEY)?,
     };
-    Ok(TuningValues {
+    let waves = waves(&raw.waves)?;
+    let crowd = crowd(&raw.crowd)?;
+    for (kind, values, raw_enemy) in [
+        (EnemyKind::Grunt, &grunt, &raw.grunt),
+        (EnemyKind::Brute, &brute, &raw.brute),
+    ] {
+        if values.attack_token_cost > crowd.max_attack_tokens {
+            return Err(invalid_value(
+                &field_path(&enemy_section(kind), ATTACK_TOKEN_COST_KEY),
+                raw_enemy.attack_token_cost.to_string(),
+                format!(
+                    "must be at most {} ({})",
+                    field_path(CROWD_SECTION, MAX_ATTACK_TOKENS_KEY),
+                    crowd.max_attack_tokens
+                ),
+            ));
+        }
+    }
+    let values = TuningValues {
         hero,
         invulnerability_time,
         grunt,
+        brute,
         dummy,
         lane_top: top,
         lane_bottom: bottom,
         depth_tolerance,
         effects,
         run,
-    })
+        crowd,
+    };
+    Ok((values, waves))
 }
 
-/// Checks one fighter's section; `section` is `hero` or `grunt`, used in field paths.
+/// Checks the keys every fighter has; `section` is its dotted path, used in field paths.
 fn fighter(raw: &RawFighter, section: &str) -> Result<FighterTuning, TuningError> {
     Ok(FighterTuning {
         horizontal_speed: positive(raw.horizontal_speed, section, HORIZONTAL_SPEED_KEY)?,
@@ -529,7 +892,39 @@ fn fighter(raw: &RawFighter, section: &str) -> Result<FighterTuning, TuningError
     })
 }
 
-/// Checks one `attack` object; `path` is its dotted path, such as `grunt.attack`.
+/// Checks one enemy kind's section, except its token cost against the pool (see [`validate`]).
+fn enemy(raw: &RawEnemy, kind: EnemyKind) -> Result<EnemyTuning, TuningError> {
+    let section = enemy_section(kind);
+    let fighter = fighter(&raw.fighter, &section)?;
+    let knockback_resistance = checked(
+        raw.knockback_resistance,
+        &section,
+        KNOCKBACK_RESISTANCE_KEY,
+        "must be a finite number from 0 to 1",
+        |v| (0.0..=1.0).contains(&v),
+    )?;
+    let interruptible = match &raw.interruptible {
+        RawFlag::Bool(value) => *value,
+        RawFlag::NotBool(shown) => {
+            return Err(invalid_value(
+                &field_path(&section, INTERRUPTIBLE_KEY),
+                shown.clone(),
+                "must be true or false".to_string(),
+            ));
+        }
+    };
+    let attack_token_cost = whole(raw.attack_token_cost, &section, ATTACK_TOKEN_COST_KEY, 1)?;
+    let points = whole(raw.points, &section, POINTS_KEY, 1)?;
+    Ok(EnemyTuning {
+        fighter,
+        knockback_resistance,
+        interruptible,
+        attack_token_cost,
+        points: i64::from(points),
+    })
+}
+
+/// Checks one `attack` object; `path` is its dotted path, such as `enemies.grunt.attack`.
 fn attack(raw: &RawAttack, path: &str) -> Result<AttackTuning, TuningError> {
     let wind_up_time = non_negative(raw.wind_up_time, path, WIND_UP_TIME_KEY)?;
     let active_time = positive(raw.active_time, path, ACTIVE_TIME_KEY)?;
@@ -562,6 +957,95 @@ fn attack(raw: &RawAttack, path: &str) -> Result<AttackTuning, TuningError> {
     })
 }
 
+/// Checks the `waves` section.
+fn waves(raw: &RawWaves) -> Result<WaveTuning, TuningError> {
+    let list_path = field_path(WAVES_SECTION, LIST_KEY);
+    let entries = match &raw.list {
+        RawList::Entries(entries) => entries,
+        RawList::NotArray(shown) => {
+            return Err(invalid_value(
+                &list_path,
+                shown.clone(),
+                "must be an array of waves".to_string(),
+            ));
+        }
+    };
+    if entries.is_empty() {
+        return Err(invalid_value(
+            &list_path,
+            "[]".to_string(),
+            "must hold at least one wave".to_string(),
+        ));
+    }
+    let mut list = Vec::with_capacity(entries.len());
+    for (index, entry) in entries.iter().enumerate() {
+        let path = entry_path(index);
+        let spec = WaveSpec {
+            grunts: whole(entry.grunts, &path, GRUNTS_KEY, 0)?,
+            brutes: whole(entry.brutes, &path, BRUTES_KEY, 0)?,
+        };
+        if spec.total() == 0 {
+            return Err(invalid_value(
+                &path,
+                "0 grunts and 0 brutes".to_string(),
+                "must hold at least one enemy".to_string(),
+            ));
+        }
+        list.push(spec);
+    }
+    let extra_grunts_per_wave = whole(
+        raw.extra_grunts_per_wave,
+        WAVES_SECTION,
+        EXTRA_GRUNTS_PER_WAVE_KEY,
+        0,
+    )?;
+    let brute_every_waves = whole(
+        raw.brute_every_waves,
+        WAVES_SECTION,
+        BRUTE_EVERY_WAVES_KEY,
+        0,
+    )?;
+    if extra_grunts_per_wave == 0 && brute_every_waves == 0 {
+        return Err(invalid_value(
+            &field_path(WAVES_SECTION, EXTRA_GRUNTS_PER_WAVE_KEY),
+            "0".to_string(),
+            format!(
+                "must be above 0 while {} is 0, so waves keep growing",
+                field_path(WAVES_SECTION, BRUTE_EVERY_WAVES_KEY)
+            ),
+        ));
+    }
+    Ok(WaveTuning {
+        list,
+        extra_grunts_per_wave,
+        brute_every_waves,
+        spawn_interval: non_negative(raw.spawn_interval, WAVES_SECTION, SPAWN_INTERVAL_KEY)?,
+        breather_time: non_negative(raw.breather_time, WAVES_SECTION, BREATHER_TIME_KEY)?,
+        banner_time: non_negative(raw.banner_time, WAVES_SECTION, BANNER_TIME_KEY)?,
+        max_on_screen: whole(raw.max_on_screen, WAVES_SECTION, MAX_ON_SCREEN_KEY, 1)?,
+    })
+}
+
+/// Checks the `crowd` section.
+fn crowd(raw: &RawCrowd) -> Result<CrowdTuning, TuningError> {
+    Ok(CrowdTuning {
+        max_attack_tokens: whole(
+            raw.max_attack_tokens,
+            CROWD_SECTION,
+            MAX_ATTACK_TOKENS_KEY,
+            1,
+        )?,
+        waiting_distance: positive(raw.waiting_distance, CROWD_SECTION, WAITING_DISTANCE_KEY)?,
+        drift_speed: non_negative(raw.drift_speed, CROWD_SECTION, DRIFT_SPEED_KEY)?,
+        separation_radius: non_negative(
+            raw.separation_radius,
+            CROWD_SECTION,
+            SEPARATION_RADIUS_KEY,
+        )?,
+        max_wait_time: non_negative(raw.max_wait_time, CROWD_SECTION, MAX_WAIT_TIME_KEY)?,
+    })
+}
+
 /// Accepts a finite value `>= 0`, naming `section.key` otherwise.
 fn non_negative(raw: f64, section: &str, key: &str) -> Result<f32, TuningError> {
     checked(raw, section, key, "must be a finite number >= 0", |v| {
@@ -576,27 +1060,62 @@ fn positive(raw: f64, section: &str, key: &str) -> Result<f32, TuningError> {
     })
 }
 
-/// The dotted path of a key in a fighter's `attack` object, such as `grunt.attack.reach`.
+/// Accepts a whole number from `min` up to `u32::MAX`, naming `section.key` otherwise.
+fn whole(raw: f64, section: &str, key: &str, min: u32) -> Result<u32, TuningError> {
+    let fits = raw.is_finite() && raw.fract() == 0.0 && raw >= f64::from(min);
+    if fits && raw <= f64::from(u32::MAX) {
+        Ok(raw as u32)
+    } else {
+        Err(invalid_value(
+            &field_path(section, key),
+            raw.to_string(),
+            format!("must be a whole number >= {min}"),
+        ))
+    }
+}
+
+/// The key of an enemy kind's section inside `enemies`.
+fn kind_key(kind: EnemyKind) -> &'static str {
+    match kind {
+        EnemyKind::Grunt => "grunt",
+        EnemyKind::Brute => "brute",
+    }
+}
+
+/// The dotted path of an enemy kind's section, such as `enemies.brute`.
+fn enemy_section(kind: EnemyKind) -> String {
+    field_path(ENEMIES_SECTION, kind_key(kind))
+}
+
+/// The path of one entry of `waves.list`, counted from 0 as in the file: `waves.list[2]`.
+fn entry_path(index: usize) -> String {
+    format!("{}[{index}]", field_path(WAVES_SECTION, LIST_KEY))
+}
+
+/// The dotted path of a key in a fighter's `attack` object, such as `enemies.grunt.attack.reach`.
 fn attack_path(section: &str, key: &str) -> String {
     field_path(&field_path(section, ATTACK_KEY), key)
 }
 
-/// Reads [`TUNING_PATH`] and returns its numbers unchecked; [`validate`] checks them.
+/// Reads [`TUNING_PATH`] and returns its values unchecked; [`validate`] checks them.
 ///
 /// Every call rereads the file from disk, so edits made while the game runs are picked up.
 /// Unknown keys are ignored, so sections can be added before the code that reads them.
 pub fn read_raw_tuning() -> Result<RawTuning, TuningError> {
     let root = read_json_object()?;
     let hero = object_field(&root, HERO_SECTION, HERO_SECTION)?;
-    let grunt = object_field(&root, GRUNT_SECTION, GRUNT_SECTION)?;
+    let enemies = object_field(&root, ENEMIES_SECTION, ENEMIES_SECTION)?;
     let dummy = object_field(&root, DUMMY_SECTION, DUMMY_SECTION)?;
     let lane = object_field(&root, LANE_SECTION, LANE_SECTION)?;
     let effects = object_field(&root, EFFECTS_SECTION, EFFECTS_SECTION)?;
     let run = object_field(&root, RUN_SECTION, RUN_SECTION)?;
+    let waves = object_field(&root, WAVES_SECTION, WAVES_SECTION)?;
+    let crowd = object_field(&root, CROWD_SECTION, CROWD_SECTION)?;
     Ok(RawTuning {
         hero: read_fighter(&hero, HERO_SECTION)?,
         invulnerability_time: number_in(&hero, HERO_SECTION, INVULNERABILITY_TIME_KEY)?,
-        grunt: read_fighter(&grunt, GRUNT_SECTION)?,
+        grunt: read_enemy(&enemies, EnemyKind::Grunt)?,
+        brute: read_enemy(&enemies, EnemyKind::Brute)?,
         dummy_hurtbox_width: number_in(&dummy, DUMMY_SECTION, HURTBOX_WIDTH_KEY)?,
         dummy_hurtbox_height: number_in(&dummy, DUMMY_SECTION, HURTBOX_HEIGHT_KEY)?,
         lane_top: number_in(&lane, LANE_SECTION, LANE_TOP_KEY)?,
@@ -606,12 +1125,19 @@ pub fn read_raw_tuning() -> Result<RawTuning, TuningError> {
         flash_time: number_in(&effects, EFFECTS_SECTION, FLASH_TIME_KEY)?,
         shake_strength: number_in(&effects, EFFECTS_SECTION, SHAKE_STRENGTH_KEY)?,
         shake_time: number_in(&effects, EFFECTS_SECTION, SHAKE_TIME_KEY)?,
-        respawn_delay: number_in(&run, RUN_SECTION, RESPAWN_DELAY_KEY)?,
         death_fade_time: number_in(&run, RUN_SECTION, DEATH_FADE_TIME_KEY)?,
+        waves: read_waves(&waves)?,
+        crowd: RawCrowd {
+            max_attack_tokens: number_in(&crowd, CROWD_SECTION, MAX_ATTACK_TOKENS_KEY)?,
+            waiting_distance: number_in(&crowd, CROWD_SECTION, WAITING_DISTANCE_KEY)?,
+            drift_speed: number_in(&crowd, CROWD_SECTION, DRIFT_SPEED_KEY)?,
+            separation_radius: number_in(&crowd, CROWD_SECTION, SEPARATION_RADIUS_KEY)?,
+            max_wait_time: number_in(&crowd, CROWD_SECTION, MAX_WAIT_TIME_KEY)?,
+        },
     })
 }
 
-/// Reads one fighter's section, including its nested `attack` object.
+/// Reads the keys every fighter has, including its nested `attack` object.
 fn read_fighter(object: &VarDictionary, section: &str) -> Result<RawFighter, TuningError> {
     let attack_section = field_path(section, ATTACK_KEY);
     let attack = object_field(object, ATTACK_KEY, &attack_section)?;
@@ -635,9 +1161,71 @@ fn read_fighter(object: &VarDictionary, section: &str) -> Result<RawFighter, Tun
     })
 }
 
+/// Reads one enemy kind's section from the `enemies` object. One reader serves every kind.
+fn read_enemy(enemies: &VarDictionary, kind: EnemyKind) -> Result<RawEnemy, TuningError> {
+    let section = enemy_section(kind);
+    let object = object_field(enemies, kind_key(kind), &section)?;
+    Ok(RawEnemy {
+        fighter: read_fighter(&object, &section)?,
+        knockback_resistance: number_in(&object, &section, KNOCKBACK_RESISTANCE_KEY)?,
+        interruptible: bool_in(&object, &section, INTERRUPTIBLE_KEY)?,
+        attack_token_cost: number_in(&object, &section, ATTACK_TOKEN_COST_KEY)?,
+        points: number_in(&object, &section, POINTS_KEY)?,
+    })
+}
+
+/// Reads the `waves` section, including its list.
+fn read_waves(object: &VarDictionary) -> Result<RawWaves, TuningError> {
+    Ok(RawWaves {
+        list: list_in(object)?,
+        extra_grunts_per_wave: number_in(object, WAVES_SECTION, EXTRA_GRUNTS_PER_WAVE_KEY)?,
+        brute_every_waves: number_in(object, WAVES_SECTION, BRUTE_EVERY_WAVES_KEY)?,
+        spawn_interval: number_in(object, WAVES_SECTION, SPAWN_INTERVAL_KEY)?,
+        breather_time: number_in(object, WAVES_SECTION, BREATHER_TIME_KEY)?,
+        banner_time: number_in(object, WAVES_SECTION, BANNER_TIME_KEY)?,
+        max_on_screen: number_in(object, WAVES_SECTION, MAX_ON_SCREEN_KEY)?,
+    })
+}
+
+/// Reads `waves.list`: an array of `{ grunts, brutes }` objects. Anything that is not an array is
+/// kept as text for [`validate`] to reject; an entry that is not an object is rejected here.
+fn list_in(waves: &VarDictionary) -> Result<RawList, TuningError> {
+    let path = field_path(WAVES_SECTION, LIST_KEY);
+    let value = required(waves, LIST_KEY, &path)?;
+    let Ok(array) = value.try_to::<VarArray>() else {
+        return Ok(RawList::NotArray(value.to_string()));
+    };
+    let mut entries = Vec::with_capacity(array.len());
+    for (index, item) in array.iter_shared().enumerate() {
+        let entry_path = entry_path(index);
+        let object = item.try_to::<VarDictionary>().map_err(|_| {
+            invalid_value(
+                &entry_path,
+                item.to_string(),
+                "must be a JSON object".into(),
+            )
+        })?;
+        entries.push(RawWave {
+            grunts: number_in(&object, &entry_path, GRUNTS_KEY)?,
+            brutes: number_in(&object, &entry_path, BRUTES_KEY)?,
+        });
+    }
+    Ok(RawList::Entries(entries))
+}
+
 /// Reads the number at `section.key` from the already-read `section` object.
 fn number_in(object: &VarDictionary, section: &str, key: &str) -> Result<f64, TuningError> {
     number_field(object, key, &field_path(section, key))
+}
+
+/// Reads the value at `section.key` as a flag; anything but a boolean is kept as text for
+/// [`validate`] to reject.
+fn bool_in(object: &VarDictionary, section: &str, key: &str) -> Result<RawFlag, TuningError> {
+    let value = required(object, key, &field_path(section, key))?;
+    Ok(match value.get_type() {
+        VariantType::BOOL => RawFlag::Bool(value.to::<bool>()),
+        _ => RawFlag::NotBool(value.to_string()),
+    })
 }
 
 /// Converts `raw` to `f32` and accepts it only if it is finite and passes `rule`; otherwise
@@ -754,6 +1342,7 @@ mod tests {
     const SCREEN: f32 = 720.0;
     const TOP: f64 = 400.0;
     const BOTTOM: f64 = 650.0;
+    const POOL: f64 = 3.0;
     const NOT_FINITE: [f64; 3] = [f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
 
     fn raw_attack(wind_up_time: f64) -> RawAttack {
@@ -769,6 +1358,29 @@ mod tests {
         }
     }
 
+    fn raw_enemy(health: f64, wind_up: f64, resistance: f64, cost: f64, points: f64) -> RawEnemy {
+        RawEnemy {
+            fighter: RawFighter {
+                horizontal_speed: 120.0,
+                vertical_speed: 70.0,
+                max_health: health,
+                hurtbox_width: 44.0,
+                hurtbox_height: 110.0,
+                hit_stun_time: 0.35,
+                attack: RawAttack {
+                    damage: 12.0,
+                    knockback_distance: 70.0,
+                    knockback_time: 0.3,
+                    ..raw_attack(wind_up)
+                },
+            },
+            knockback_resistance: resistance,
+            interruptible: RawFlag::Bool(resistance == 0.0),
+            attack_token_cost: cost,
+            points,
+        }
+    }
+
     fn raw() -> RawTuning {
         RawTuning {
             hero: RawFighter {
@@ -781,20 +1393,8 @@ mod tests {
                 attack: raw_attack(0.05),
             },
             invulnerability_time: 0.8,
-            grunt: RawFighter {
-                horizontal_speed: 120.0,
-                vertical_speed: 70.0,
-                max_health: 25.0,
-                hurtbox_width: 44.0,
-                hurtbox_height: 110.0,
-                hit_stun_time: 0.35,
-                attack: RawAttack {
-                    damage: 12.0,
-                    knockback_distance: 70.0,
-                    knockback_time: 0.3,
-                    ..raw_attack(0.5)
-                },
-            },
+            grunt: raw_enemy(25.0, 0.5, 0.0, 1.0, 15.0),
+            brute: raw_enemy(90.0, 0.8, 0.6, 3.0, 40.0),
             dummy_hurtbox_width: 38.0,
             dummy_hurtbox_height: 100.0,
             lane_top: TOP,
@@ -804,8 +1404,36 @@ mod tests {
             flash_time: 0.1,
             shake_strength: 4.0,
             shake_time: 0.1,
-            respawn_delay: 1.2,
             death_fade_time: 0.4,
+            waves: RawWaves {
+                list: RawList::Entries(vec![
+                    RawWave {
+                        grunts: 1.0,
+                        brutes: 0.0,
+                    },
+                    RawWave {
+                        grunts: 2.0,
+                        brutes: 1.0,
+                    },
+                    RawWave {
+                        grunts: 0.0,
+                        brutes: 2.0,
+                    },
+                ]),
+                extra_grunts_per_wave: 2.0,
+                brute_every_waves: 4.0,
+                spawn_interval: 0.5,
+                breather_time: 1.5,
+                banner_time: 1.0,
+                max_on_screen: 8.0,
+            },
+            crowd: RawCrowd {
+                max_attack_tokens: POOL,
+                waiting_distance: 150.0,
+                drift_speed: 30.0,
+                separation_radius: 48.0,
+                max_wait_time: 3.5,
+            },
         }
     }
 
@@ -813,7 +1441,11 @@ mod tests {
         validate(&raw, SCREEN).expect_err("should be rejected")
     }
 
-    /// Sets one field of a [`RawTuning`].
+    fn accepted(raw: &RawTuning) -> (TuningValues, WaveTuning) {
+        validate(raw, SCREEN).expect("should be accepted")
+    }
+
+    /// Sets one number of a [`RawTuning`].
     type Setter = fn(&mut RawTuning, f64);
 
     /// Every field that must be finite and `> 0`, with its path and a setter.
@@ -829,20 +1461,44 @@ mod tests {
             }),
             ("hero.attack.reach", |r, v| r.hero.attack.reach = v),
             ("hero.attack.damage", |r, v| r.hero.attack.damage = v),
-            ("grunt.horizontal_speed", |r, v| {
-                r.grunt.horizontal_speed = v
+            ("enemies.grunt.horizontal_speed", |r, v| {
+                r.grunt.fighter.horizontal_speed = v
             }),
-            ("grunt.vertical_speed", |r, v| r.grunt.vertical_speed = v),
-            ("grunt.max_health", |r, v| r.grunt.max_health = v),
-            ("grunt.hurtbox_width", |r, v| r.grunt.hurtbox_width = v),
-            ("grunt.hurtbox_height", |r, v| r.grunt.hurtbox_height = v),
-            ("grunt.attack.active_time", |r, v| {
-                r.grunt.attack.active_time = v
+            ("enemies.grunt.vertical_speed", |r, v| {
+                r.grunt.fighter.vertical_speed = v
             }),
-            ("grunt.attack.reach", |r, v| r.grunt.attack.reach = v),
-            ("grunt.attack.damage", |r, v| r.grunt.attack.damage = v),
+            ("enemies.grunt.max_health", |r, v| {
+                r.grunt.fighter.max_health = v
+            }),
+            ("enemies.grunt.hurtbox_width", |r, v| {
+                r.grunt.fighter.hurtbox_width = v
+            }),
+            ("enemies.grunt.hurtbox_height", |r, v| {
+                r.grunt.fighter.hurtbox_height = v
+            }),
+            ("enemies.grunt.attack.active_time", |r, v| {
+                r.grunt.fighter.attack.active_time = v
+            }),
+            ("enemies.grunt.attack.reach", |r, v| {
+                r.grunt.fighter.attack.reach = v
+            }),
+            ("enemies.grunt.attack.damage", |r, v| {
+                r.grunt.fighter.attack.damage = v
+            }),
+            ("enemies.brute.horizontal_speed", |r, v| {
+                r.brute.fighter.horizontal_speed = v
+            }),
+            ("enemies.brute.max_health", |r, v| {
+                r.brute.fighter.max_health = v
+            }),
+            ("enemies.brute.attack.damage", |r, v| {
+                r.brute.fighter.attack.damage = v
+            }),
             ("dummy.hurtbox_width", |r, v| r.dummy_hurtbox_width = v),
             ("dummy.hurtbox_height", |r, v| r.dummy_hurtbox_height = v),
+            ("crowd.waiting_distance", |r, v| {
+                r.crowd.waiting_distance = v
+            }),
         ]
     }
 
@@ -863,59 +1519,113 @@ mod tests {
             ("hero.attack.knockback_distance", |r, v| {
                 r.hero.attack.knockback_distance = v
             }),
-            ("grunt.hit_stun_time", |r, v| r.grunt.hit_stun_time = v),
-            ("grunt.attack.wind_up_time", |r, v| {
-                r.grunt.attack.wind_up_time = v
+            ("enemies.grunt.hit_stun_time", |r, v| {
+                r.grunt.fighter.hit_stun_time = v
             }),
-            ("grunt.attack.recovery_time", |r, v| {
-                r.grunt.attack.recovery_time = v
+            ("enemies.grunt.attack.wind_up_time", |r, v| {
+                r.grunt.fighter.attack.wind_up_time = v
             }),
-            ("grunt.attack.height", |r, v| r.grunt.attack.height = v),
-            ("grunt.attack.knockback_distance", |r, v| {
-                r.grunt.attack.knockback_distance = v
+            ("enemies.grunt.attack.recovery_time", |r, v| {
+                r.grunt.fighter.attack.recovery_time = v
+            }),
+            ("enemies.grunt.attack.knockback_distance", |r, v| {
+                r.grunt.fighter.attack.knockback_distance = v
+            }),
+            ("enemies.brute.hit_stun_time", |r, v| {
+                r.brute.fighter.hit_stun_time = v
+            }),
+            ("enemies.brute.attack.wind_up_time", |r, v| {
+                r.brute.fighter.attack.wind_up_time = v
             }),
             ("lane.depth_tolerance", |r, v| r.depth_tolerance = v),
             ("effects.hit_stop_time", |r, v| r.hit_stop_time = v),
             ("effects.flash_time", |r, v| r.flash_time = v),
             ("effects.shake_strength", |r, v| r.shake_strength = v),
             ("effects.shake_time", |r, v| r.shake_time = v),
-            ("run.respawn_delay", |r, v| r.respawn_delay = v),
             ("run.death_fade_time", |r, v| r.death_fade_time = v),
+            ("waves.spawn_interval", |r, v| r.waves.spawn_interval = v),
+            ("waves.breather_time", |r, v| r.waves.breather_time = v),
+            ("waves.banner_time", |r, v| r.waves.banner_time = v),
+            ("crowd.drift_speed", |r, v| r.crowd.drift_speed = v),
+            ("crowd.separation_radius", |r, v| {
+                r.crowd.separation_radius = v
+            }),
+            ("crowd.max_wait_time", |r, v| r.crowd.max_wait_time = v),
         ]
+    }
+
+    /// Sets `waves.list` to `entries` as (grunts, brutes) pairs.
+    fn with_list(entries: &[(f64, f64)]) -> RawTuning {
+        let mut r = raw();
+        r.waves.list = RawList::Entries(
+            entries
+                .iter()
+                .map(|&(grunts, brutes)| RawWave { grunts, brutes })
+                .collect(),
+        );
+        r
     }
 
     // --- Values are read into the right places. ---
 
     #[test]
     fn validate_accepts_valid_values_and_keeps_them_apart() {
-        let values = validate(&raw(), SCREEN).expect("all values are valid");
+        let (values, waves) = accepted(&raw());
         let hero = values.hero();
         assert_eq!(hero.horizontal_speed(), 250.0);
-        assert_eq!(hero.vertical_speed(), 150.0);
         assert_eq!(hero.max_health(), 80.0);
-        assert_eq!(hero.hurtbox_width(), 40.0);
-        assert_eq!(hero.hurtbox_height(), 90.0);
-        assert_eq!(hero.hit_stun_time(), 0.2);
         assert_eq!(hero.attack().wind_up_time(), 0.05);
-        assert_eq!(hero.attack().damage(), 7.0);
-        assert_eq!(hero.attack().knockback_distance(), 50.0);
         assert_eq!(values.invulnerability_time(), 0.8);
-        let grunt = values.grunt();
-        assert_eq!(grunt.horizontal_speed(), 120.0);
+        let grunt = values.enemy(EnemyKind::Grunt);
         assert_eq!(grunt.max_health(), 25.0);
         assert_eq!(grunt.hit_stun_time(), 0.35);
         assert_eq!(grunt.attack().wind_up_time(), 0.5);
         assert_eq!(grunt.attack().damage(), 12.0);
-        assert_eq!(grunt.attack().knockback_distance(), 70.0);
-        assert_eq!(grunt.attack().knockback_time(), 0.3);
+        assert_eq!(grunt.knockback_resistance(), 0.0);
+        assert!(grunt.interruptible());
+        assert_eq!(grunt.attack_token_cost(), 1);
+        assert_eq!(grunt.points(), 15);
+        let brute = values.enemy(EnemyKind::Brute);
+        assert_eq!(brute.max_health(), 90.0);
+        assert_eq!(brute.attack().wind_up_time(), 0.8);
+        assert_eq!(brute.knockback_resistance(), 0.6);
+        assert!(!brute.interruptible());
+        assert_eq!(brute.attack_token_cost(), 3);
+        assert_eq!(brute.points(), 40);
         assert_eq!(values.dummy().hurtbox_width(), 38.0);
         assert_eq!(values.lane_top(), 400.0);
-        assert_eq!(values.lane_bottom(), 650.0);
         assert_eq!(values.depth_tolerance(), 15.0);
-        assert_eq!(values.effects().hit_stop_time(), 0.05);
         assert_eq!(values.effects().shake_strength(), 4.0);
-        assert_eq!(values.run().respawn_delay(), 1.2);
         assert_eq!(values.run().death_fade_time(), 0.4);
+        let crowd = values.crowd();
+        assert_eq!(crowd.max_attack_tokens(), 3);
+        assert_eq!(crowd.waiting_distance(), 150.0);
+        assert_eq!(crowd.drift_speed(), 30.0);
+        assert_eq!(crowd.separation_radius(), 48.0);
+        assert_eq!(crowd.max_wait_time(), 3.5);
+        assert_eq!(
+            waves.list(),
+            &[
+                WaveSpec {
+                    grunts: 1,
+                    brutes: 0
+                },
+                WaveSpec {
+                    grunts: 2,
+                    brutes: 1
+                },
+                WaveSpec {
+                    grunts: 0,
+                    brutes: 2
+                },
+            ]
+        );
+        assert_eq!(waves.extra_grunts_per_wave(), 2);
+        assert_eq!(waves.brute_every_waves(), 4);
+        assert_eq!(waves.spawn_interval(), 0.5);
+        assert_eq!(waves.breather_time(), 1.5);
+        assert_eq!(waves.banner_time(), 1.0);
+        assert_eq!(waves.max_on_screen(), 8);
     }
 
     // --- One passing and one failing case per rule. ---
@@ -954,14 +1664,15 @@ mod tests {
         let mut off = raw();
         off.hero.attack.knockback_distance = 0.0;
         off.hero.attack.knockback_time = 0.0;
-        off.grunt.attack.knockback_distance = 0.0;
-        off.grunt.attack.knockback_time = 0.0;
+        off.brute.fighter.attack.knockback_distance = 0.0;
+        off.brute.fighter.attack.knockback_time = 0.0;
         assert!(validate(&off, SCREEN).is_ok());
-        for section in ["hero", "grunt"] {
+        for section in ["hero", "enemies.grunt", "enemies.brute"] {
             let mut wrong = raw();
             match section {
                 "hero" => wrong.hero.attack.knockback_time = 0.0,
-                _ => wrong.grunt.attack.knockback_time = 0.0,
+                "enemies.grunt" => wrong.grunt.fighter.attack.knockback_time = 0.0,
+                _ => wrong.brute.fighter.attack.knockback_time = 0.0,
             }
             let error = rejected(wrong);
             assert_eq!(error.field(), format!("{section}.attack.knockback_time"));
@@ -971,10 +1682,6 @@ mod tests {
                 "{reason}"
             );
         }
-        let mut negative = raw();
-        negative.grunt.attack.knockback_distance = 0.0;
-        negative.grunt.attack.knockback_time = -1.0;
-        assert_eq!(rejected(negative).field(), "grunt.attack.knockback_time");
     }
 
     #[test]
@@ -1015,35 +1722,181 @@ mod tests {
     }
 
     #[test]
+    fn validate_knockback_resistance_must_be_from_zero_to_one() {
+        for ok_value in [0.0, 1.0] {
+            let mut ok = raw();
+            ok.brute.knockback_resistance = ok_value;
+            assert!(validate(&ok, SCREEN).is_ok(), "{ok_value}");
+        }
+        for bad in [-0.1, 1.1, f64::NAN] {
+            let mut wrong = raw();
+            wrong.grunt.knockback_resistance = bad;
+            assert_eq!(
+                rejected(wrong).field(),
+                "enemies.grunt.knockback_resistance",
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_interruptible_must_be_true_or_false() {
+        for ok_value in [true, false] {
+            let mut ok = raw();
+            ok.brute.interruptible = RawFlag::Bool(ok_value);
+            assert!(validate(&ok, SCREEN).is_ok());
+        }
+        for shown in ["1", "no"] {
+            let mut wrong = raw();
+            wrong.brute.interruptible = RawFlag::NotBool(shown.to_string());
+            let error = rejected(wrong);
+            assert_eq!(error.field(), "enemies.brute.interruptible");
+            assert!(
+                error.reason().contains("true or false"),
+                "{}",
+                error.reason()
+            );
+            assert!(error.reason().contains(shown), "{}", error.reason());
+        }
+    }
+
+    #[test]
+    fn validate_token_cost_must_be_whole_and_fit_the_pool() {
+        for ok_value in [1.0, POOL] {
+            let mut ok = raw();
+            ok.grunt.attack_token_cost = ok_value;
+            assert!(validate(&ok, SCREEN).is_ok(), "{ok_value}");
+        }
+        for bad in [0.0, 1.5, -1.0, POOL + 1.0] {
+            let mut wrong = raw();
+            wrong.brute.attack_token_cost = bad;
+            assert_eq!(
+                rejected(wrong).field(),
+                "enemies.brute.attack_token_cost",
+                "{bad}"
+            );
+        }
+        let mut too_big = raw();
+        too_big.brute.attack_token_cost = POOL + 1.0;
+        let reason = rejected(too_big).reason();
+        assert!(reason.contains("crowd.max_attack_tokens (3)"), "{reason}");
+    }
+
+    #[test]
+    fn validate_points_must_be_whole_and_above_zero() {
+        let mut ok = raw();
+        ok.grunt.points = 1.0;
+        assert!(validate(&ok, SCREEN).is_ok());
+        for bad in [0.0, 2.5, -10.0] {
+            let mut wrong = raw();
+            wrong.grunt.points = bad;
+            assert_eq!(rejected(wrong).field(), "enemies.grunt.points", "{bad}");
+        }
+    }
+
+    #[test]
+    fn validate_wave_list_must_be_a_non_empty_array() {
+        let empty = with_list(&[]);
+        let error = rejected(empty);
+        assert_eq!(error.field(), "waves.list");
+        let mut not_array = raw();
+        not_array.waves.list = RawList::NotArray("5".to_string());
+        assert_eq!(rejected(not_array).field(), "waves.list");
+        assert!(validate(&with_list(&[(1.0, 0.0)]), SCREEN).is_ok());
+    }
+
+    #[test]
+    fn validate_wave_entries_must_be_whole_and_hold_an_enemy() {
+        assert!(validate(&with_list(&[(1.0, 0.0), (0.0, 1.0)]), SCREEN).is_ok());
+        for bad in [-1.0, 0.5] {
+            let error = rejected(with_list(&[(1.0, 0.0), (bad, 1.0)]));
+            assert_eq!(error.field(), "waves.list[1].grunts", "{bad}");
+        }
+        let error = rejected(with_list(&[(1.0, 0.0), (2.0, 0.25)]));
+        assert_eq!(error.field(), "waves.list[1].brutes");
+        let error = rejected(with_list(&[(1.0, 0.0), (0.0, 0.0)]));
+        assert_eq!(error.field(), "waves.list[1]");
+    }
+
+    #[test]
+    fn validate_wave_growth_must_be_whole_and_not_both_zero() {
+        let mut only_grunts = raw();
+        only_grunts.waves.brute_every_waves = 0.0;
+        assert!(validate(&only_grunts, SCREEN).is_ok());
+        let mut only_brutes = raw();
+        only_brutes.waves.extra_grunts_per_wave = 0.0;
+        assert!(validate(&only_brutes, SCREEN).is_ok());
+        let mut none = raw();
+        none.waves.extra_grunts_per_wave = 0.0;
+        none.waves.brute_every_waves = 0.0;
+        let error = rejected(none);
+        assert_eq!(error.field(), "waves.extra_grunts_per_wave");
+        assert!(
+            error.reason().contains("keep growing"),
+            "{}",
+            error.reason()
+        );
+        for bad in [-1.0, 1.5] {
+            let mut wrong = raw();
+            wrong.waves.brute_every_waves = bad;
+            assert_eq!(rejected(wrong).field(), "waves.brute_every_waves", "{bad}");
+        }
+    }
+
+    #[test]
+    fn validate_counts_of_one_or_more_must_be_whole() {
+        type CountSetter = (&'static str, Setter);
+        let counts: [CountSetter; 2] = [
+            ("waves.max_on_screen", |r, v| r.waves.max_on_screen = v),
+            ("crowd.max_attack_tokens", |r, v| {
+                r.crowd.max_attack_tokens = v;
+                // Keep every cost inside the pool, so only the pool itself is judged.
+                r.brute.attack_token_cost = 1.0;
+            }),
+        ];
+        for (path, set) in counts {
+            let mut ok = raw();
+            set(&mut ok, 1.0);
+            assert!(validate(&ok, SCREEN).is_ok(), "{path} = 1");
+            for bad in [0.0, 2.5, f64::NAN] {
+                let mut wrong = raw();
+                set(&mut wrong, bad);
+                assert_eq!(rejected(wrong).field(), path, "{path} = {bad}");
+            }
+        }
+    }
+
+    #[test]
     fn validate_rejection_gives_field_reason_and_full_message() {
         let mut wrong = raw();
-        wrong.grunt.max_health = -3.0;
+        wrong.grunt.fighter.max_health = -3.0;
         let error = rejected(wrong);
-        assert_eq!(error.field(), "grunt.max_health");
+        assert_eq!(error.field(), "enemies.grunt.max_health");
         let reason = error.reason();
         assert!(reason.contains("> 0"), "{reason}");
         assert!(reason.contains("-3"), "{reason}");
         assert!(!reason.contains("res://"), "{reason}");
         let message = error.to_string();
         assert!(message.contains("res://data/tuning.json"), "{message}");
-        assert!(message.contains("grunt.max_health"), "{message}");
+        assert!(message.contains("enemies.grunt.max_health"), "{message}");
     }
 
-    // --- The wind-up warning: accepted, but flagged. ---
+    // --- The wind-up warnings: accepted, but flagged. ---
 
     #[test]
-    fn warnings_flag_a_grunt_wind_up_not_longer_than_the_heros() {
-        let values = validate(&raw(), SCREEN).expect("valid");
+    fn warnings_flag_an_enemy_wind_up_not_longer_than_the_heros() {
+        let (values, _) = accepted(&raw());
         assert!(warnings(&values).is_empty());
         for grunt_wind_up in [0.05, 0.03, 0.0] {
             let mut short = raw();
-            short.grunt.attack.wind_up_time = grunt_wind_up;
-            let values = validate(&short, SCREEN).expect("still accepted");
+            short.grunt.fighter.attack.wind_up_time = grunt_wind_up;
+            let (values, _) = accepted(&short);
             assert_eq!(
                 warnings(&values),
-                vec![TuningWarning::GruntWindUpNotLonger {
+                vec![TuningWarning::EnemyWindUpNotLonger {
+                    kind: EnemyKind::Grunt,
                     hero: 0.05,
-                    grunt: grunt_wind_up as f32,
+                    enemy: grunt_wind_up as f32,
                 }],
                 "{grunt_wind_up}"
             );
@@ -1051,14 +1904,36 @@ mod tests {
     }
 
     #[test]
-    fn warning_message_names_both_fields_and_values() {
-        let message = TuningWarning::GruntWindUpNotLonger {
+    fn warnings_flag_a_brute_wind_up_not_longer_than_the_grunts() {
+        for brute_wind_up in [0.5, 0.3] {
+            let mut short = raw();
+            short.brute.fighter.attack.wind_up_time = brute_wind_up;
+            let (values, _) = accepted(&short);
+            assert_eq!(
+                warnings(&values),
+                vec![TuningWarning::BruteWindUpNotLonger {
+                    grunt: 0.5,
+                    brute: brute_wind_up as f32,
+                }],
+                "{brute_wind_up}"
+            );
+        }
+        let mut both = raw();
+        both.brute.fighter.attack.wind_up_time = 0.04;
+        let (values, _) = accepted(&both);
+        assert_eq!(warnings(&values).len(), 2, "brute below hero and grunt");
+    }
+
+    #[test]
+    fn warning_messages_name_both_fields_and_values() {
+        let message = TuningWarning::EnemyWindUpNotLonger {
+            kind: EnemyKind::Brute,
             hero: 0.05,
-            grunt: 0.03,
+            enemy: 0.03,
         }
         .to_string();
         assert!(
-            message.starts_with("grunt.attack.wind_up_time"),
+            message.starts_with("enemies.brute.attack.wind_up_time"),
             "{message}"
         );
         assert!(
@@ -1066,6 +1941,20 @@ mod tests {
             "{message}"
         );
         assert!(message.contains("got 0.03"), "{message}");
+        assert!(message.contains("the brute's attack"), "{message}");
+        let message = TuningWarning::BruteWindUpNotLonger {
+            grunt: 0.5,
+            brute: 0.4,
+        }
+        .to_string();
+        assert!(
+            message.starts_with("enemies.brute.attack.wind_up_time"),
+            "{message}"
+        );
+        assert!(
+            message.contains("enemies.grunt.attack.wind_up_time (0.5)"),
+            "{message}"
+        );
     }
 
     #[test]
@@ -1078,9 +1967,9 @@ mod tests {
         assert!(unreadable.reason().contains("not found"));
         let missing = TuningError::MissingField {
             path: TUNING_PATH.to_string(),
-            field: "hero.attack".to_string(),
+            field: "enemies.brute.attack".to_string(),
         };
-        assert_eq!(missing.field(), "hero.attack");
+        assert_eq!(missing.field(), "enemies.brute.attack");
         assert_eq!(missing.reason(), "missing");
     }
 }

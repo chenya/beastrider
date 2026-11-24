@@ -7,7 +7,7 @@
 use godot::classes::{INode, Node};
 use godot::prelude::*;
 
-use crate::tuning::{self, TuningError, TuningValues, TuningWarning};
+use crate::tuning::{self, TuningError, TuningValues, TuningWarning, WaveTuning};
 
 /// Loads, checks and holds the current tuning values; registered as the autoload `Tuning`.
 ///
@@ -21,6 +21,9 @@ use crate::tuning::{self, TuningError, TuningValues, TuningWarning};
 pub struct TuningStore {
     /// The values in use; `None` only until a load first succeeds.
     values: Option<TuningValues>,
+    /// The wave list and its timing, checked together with `values`; `None` exactly when
+    /// `values` is.
+    waves: Option<WaveTuning>,
     /// Why the last load or reload was rejected; `None` after a success.
     rejection: Option<TuningError>,
     /// What the last successful load or reload warned about; empty when nothing did.
@@ -34,6 +37,7 @@ impl INode for TuningStore {
         // Nothing is loaded until `ready()`, when the viewport (needed by the lane rule) exists.
         Self {
             values: None,
+            waves: None,
             rejection: None,
             warnings: Vec::new(),
             base,
@@ -121,14 +125,15 @@ impl TuningStore {
         self.values.map_or(0.0, |v| v.effects().shake_time())
     }
 
-    /// How long a dying grunt takes to fade out, in seconds, or `0.0` without values.
+    /// How long a dying enemy takes to fade out, in seconds, or `0.0` without values.
     #[func]
     pub fn death_fade_time(&self) -> f32 {
         self.values.map_or(0.0, |v| v.run().death_fade_time())
     }
 
-    /// The warning of the last successful load or reload, or `""` when there is none. The values
-    /// are in use either way; a warning only flags a combination that is probably a slip.
+    /// The first warning of the last successful load or reload, or `""` when there is none (every
+    /// warning is printed to the output panel). The values are in use either way; a warning only
+    /// flags a combination that is probably a slip.
     #[func]
     pub fn warning(&self) -> GString {
         self.warnings
@@ -161,6 +166,13 @@ impl TuningStore {
         self.values
     }
 
+    /// The wave list and its timing, cloned, or `None` while no load has succeeded. Only the wave
+    /// director reads it, once per tick; it is apart from [`values`](Self::values) because a list
+    /// cannot be `Copy`.
+    pub fn waves(&self) -> Option<WaveTuning> {
+        self.waves.clone()
+    }
+
     /// Reads and checks the file, and swaps the values in only if all of them are valid.
     fn load(&mut self) -> Result<(), TuningError> {
         let screen_height = self
@@ -170,12 +182,13 @@ impl TuningStore {
         let result =
             tuning::read_raw_tuning().and_then(|raw| tuning::validate(&raw, screen_height));
         match result {
-            Ok(values) => {
+            Ok((values, waves)) => {
                 self.warnings = tuning::warnings(&values);
                 for warning in &self.warnings {
                     godot_warn!("Tuning: {warning}");
                 }
                 self.values = Some(values);
+                self.waves = Some(waves);
                 self.rejection = None;
                 Ok(())
             }

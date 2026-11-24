@@ -3,7 +3,7 @@
 //! Rust owns its knockback slide and keeps it inside the lane and the screen; the scene only sets
 //! where it starts and what it looks like. Presentation (the white flash, the screen shake) reacts
 //! to its `was_hit` signal without the dummy knowing about it. It is on the enemies' team with no
-//! health: the hero can hit it, grunts ignore it, and it never dies or counts as a kill.
+//! health: the hero can hit it, enemies ignore it, and it never dies or counts as a kill.
 
 use godot::classes::{INode2D, Node2D};
 use godot::prelude::*;
