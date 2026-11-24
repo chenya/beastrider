@@ -51,6 +51,23 @@ acceptance checks and out-of-scope list as given by the owner in the `/speckit-s
 - Q (planning): Does F8 wait out a breather? → A: No. It removes every enemy with no points and
   starts the next wave's banner at once.
 
+### Session 2026-11-23 (implementation)
+
+- Q: An attacker that finishes its recovery is itself the nearest waiting enemy, so it took every
+  turn back. How should turns rotate? → A: An enemy whose turn ended, or that was stunned,
+  retreats to its waiting spot and can take a turn again only once it is back (within the
+  separation distance of its spot, or on the waiting ring if the crowd keeps it off the spot).
+- Q: A new enemy drifted from the screen edge to its spot at the drift speed, about 11 s. How
+  should enemies reach their spot? → A: Farther than the separation distance from its spot, an
+  enemy walks there at its own speeds; within it, it drifts at the drift speed. A drift speed of 0
+  stops it once there.
+- Q: With "nearest first", a brute among grunts could wait for ever. How does no enemy wait for
+  ever? → A: A tuned maximum wait (`crowd.max_wait_time`, starting at 4 s): an enemy that has
+  waited longer goes first, longest waiting first, before nearer ones.
+- Found while checking (no question): an enemy approaching with a turn could be held off its
+  line by a waiting enemy at its spot, so it never attacked and kept its token. Enemies with a
+  turn now push waiting ones aside; attacking enemies still never move.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Waves that clear and come again (Priority: P1)
@@ -310,15 +327,21 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
   behaviour MUST NOT be a copy of the grunt's.
 - **FR-010**: An enemy MUST hold its kind's attack-token cost (from the data) to close in and
   attack, and the tokens held at one time MUST never exceed the token pool (from the data). Every
-  other enemy MUST wait: it drifts at the drift speed (from the data) to its waiting spot, on its
-  own side of the hero, at least the waiting distance (from the data) away and at its own depth,
-  within the lane and screen; it keeps facing the hero and never starts an attack. A drift speed
-  of 0 MUST make it hold still.
+  other enemy MUST wait at its waiting spot, on its own side of the hero, at least the waiting
+  distance (from the data) away and at its own depth, within the lane and screen: farther than the
+  separation distance from the spot it walks there at its own speeds, nearer it drifts at the
+  drift speed (from the data); it keeps facing the hero and never starts an attack. A drift speed
+  of 0 MUST make it stop once at its spot.
 - **FR-011**: An enemy's tokens MUST be freed when it finishes its attack's recovery, is stunned,
-  or dies. Free tokens MUST go to the waiting enemy nearest the hero, and only when its whole cost
-  fits; a farther enemy is not served first. Grunts and brutes MUST share one token pool.
+  or dies. It then retreats to its spot and MUST NOT get a turn until it is back there (within
+  the separation distance of the spot, or the waiting distance less the separation distance from
+  the hero). Free tokens MUST go first to waiting enemies that have waited at least the maximum
+  wait (from the data), longest first, then to the nearest; only when the enemy's whole cost
+  fits, and nobody behind it in that order is served first. Grunts and brutes MUST share one
+  token pool.
 - **FR-012**: Enemies approaching or waiting MUST keep apart so that no two overlap into one shape,
-  while staying in the lane and on screen and keeping depth order.
+  while staying in the lane and on screen and keeping depth order. An enemy with a turn MUST NOT
+  be kept from its way in by waiting ones: they give way to it.
 - **FR-013**: Each kill MUST add the dead enemy's points (grunt points or brute points, from the
   data) to the score, once, when it starts dying. The score MUST be shown in the HUD during play,
   stay still during the shake, and work in release builds.
@@ -332,7 +355,7 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
 - **FR-017**: The wave list (grunts and brutes per wave), the escalation rule, the breather time,
   the banner time, the time between enemies entering, the on-screen maximum, every brute value in
   FR-007, the token pool and each kind's token cost, the waiting distance, the drift speed, the
-  separation distance and the points per grunt and per
+  separation distance, the maximum wait and the points per grunt and per
   brute MUST be read from the tuning data file, checked like the earlier values, and none may
   appear as a literal value in code. F5
   MUST apply them with the M2a reload rules (all or nothing): a changed wave list or escalation
@@ -372,8 +395,9 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
 - **Brute**: an enemy like the grunt, with its own values and look: bigger, slower, tougher,
   harder-hitting, longer wind-up, less knockback and stun taken.
 - **Turn**: the right to close in and attack, held as attack tokens (the kind's cost) from one
-  pool; free tokens go to the waiting enemy nearest the hero. An enemy without a turn waits at its
-  spot on its own side.
+  pool; free tokens go to an enemy that has waited past the maximum wait, else to the waiting
+  enemy nearest the hero. An enemy without a turn waits at its spot on its own side; one whose
+  turn just ended retreats there first.
 - **Wave tuning**: the new values in FR-017, in the same tuning data file as before.
 - **Actions** (extended): new `debug_spawn_brute` (F7) and `debug_next_wave` (F8).
 
@@ -431,7 +455,7 @@ clock (F4 to stay alive), watching the FPS. Then run the Quality Gate and `git s
   grunts, brutes from wave 4 (wave 4: 3 grunts and 1 brute; wave 5: 4 grunts and 1 brute); past
   that, one more grunt per wave and one more brute every 3 waves; breather about 2 s; entry interval
   about 0.6 s; a pool of 2 attack tokens, grunt cost 1, brute cost 2; waiting distance about
-  180 px; separation distance about 56 px; drift speed about 40 px/s; grunt
+  180 px; separation distance about 56 px; drift speed about 40 px/s; maximum wait 4 s; grunt
   10 points, brute 30 points. Brute: health about 120 (12 hero blows), damage 35, walk speeds about
   two thirds of a grunt's, wind-up about 0.7 s, active about 0.12 s, recovery about 0.6 s, reach
   about 75 px, body about 1.4 times a grunt's, knockback taken about a quarter of a grunt's,

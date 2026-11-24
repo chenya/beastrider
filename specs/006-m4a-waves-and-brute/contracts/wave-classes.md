@@ -22,7 +22,9 @@ Placed only by `WaveDirector`. Never give the root a script (M2b lesson); script
 | `health() -> f32`, `max_health() -> f32` | func | For its bar. |
 | `is_winding_up() -> bool` | func | True during the wind-up; drives the wind-up colour. |
 | `is_alive() -> bool` | func | False once dying. |
-| `is_waiting() -> bool` | func | True while it waits for a turn. For F2 and tests by playing. |
+| `is_waiting() -> bool` | func | True while it is without a turn: waiting, or retreating to its spot. For F2 and tests by playing. |
+| `has_turn() -> bool` | func | True while it holds a turn (approaching to the end of its recovery). For debugging and windowed checks; the director decides turns. |
+| `is_retreating() -> bool` | func | True while it drifts back to its spot after a turn or a stun, unable to take a turn until it is back. For debugging and windowed checks. |
 | `hurtbox() -> Rect2` | func | For F2; empty while entering or dying. |
 | `attack_box() -> Rect2` | func | Its reach while its attack is active, else empty. For F2. |
 

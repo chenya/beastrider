@@ -75,7 +75,7 @@ Constitution v1.3.3. ✅ = passes.
 | **I. Fun First, Playable Always** | ✅ | ✅ | Waves, a second enemy and a score turn one fight into a run with a curve. Ten of the thirteen checks are player-visible, and the milestone ends only when the owner judges five runs (US6, SC-012). Tasks keep the game runnable after each phase: waves on grunts first, then turns, then the brute, then score. |
 | **II. One Milestone at a Time** | ✅ | ✅ | Only the brief's M4a row: escalating waves, the brute, an attacker limit and a score. Potions, magic, jumping and saving the best stay out (FR-024). M4 was split into M4a and M4b to stay inside two weeks; M4a is sized at about three sessions. |
 | **III. Architecture Serves the Game** | ✅ | ✅ | Each piece names its problem: one `Enemy` with kinds because the brute must share every grunt rule without a copy; tokens because a crowd striking at once makes hits unseeable; waiting spots and separation because enemies must not stack; the director because waves, turns and spacing all need every enemy at once; `WaveTuning` apart because a list would break `Copy` at eight call sites. Not added: a trait per kind, physics bodies, navigation, an event bus, a behaviour-tree library. |
-| **IV. Data-Driven Tuning** | ✅ | ✅ | Every new value (brute stats, resistance, armor, token costs and pool, points, wave list, growth rule, interval, breather, banner, on-screen maximum, waiting distance, drift speed, separation) in `tuning.json`, checked on load, reloaded live. The depth scale is derived from the hero's speeds; colours and the banner's place are looks. |
+| **IV. Data-Driven Tuning** | ✅ | ✅ | Every new value (brute stats, resistance, armor, token costs and pool, points, wave list, growth rule, interval, breather, banner, on-screen maximum, waiting distance, drift speed, separation, maximum wait) in `tuning.json`, checked on load, reloaded live. The depth scale is derived from the hero's speeds; colours and the banner's place are looks. |
 | **V. Runs Well on Weak Hardware** | ✅ | ✅ | Placeholder polygons, the M2b flash shader, one O(n²) pass over at most 10 enemies (45 pairs) a frame; no lights or particles. Ten enemies checked on the UHD 630 (quickstart 20); the on-screen maximum caps late waves. |
 | **VI. Original Art, Cheap Animation** | ✅ | ✅ | Placeholder polygons; the brute is a bigger shape in its own colour. No outside assets. |
 | **VII. Co-op Ready, Local Only** | ✅ | ✅ | Enemies target the nearest living member of `team_players`; tokens are granted by distance to that target and waiting spots are measured from it; health stays per hero. No networking. |
@@ -128,6 +128,19 @@ Resolved in the plan without a spec change:
 - **Banner polls** `director.banner_wave()` rather than timing itself from `wave_started`, so
   GDScript holds no copy of the banner time; the signal is still emitted ([R11](research.md)).
 - **`WaveTuning` apart from `TuningValues`**, so `TuningValues` stays `Copy` ([R10](research.md)).
+
+Decided during implementation, with the owner, and recorded in the spec's Clarifications (Session
+2026-11-23, implementation), FR-010–FR-012, research R5–R7 and the data model:
+
+- **Retreat first**: an enemy whose turn ended or that was stunned goes back to its spot before it
+  can take a turn again (`EnemyMode::Retreating`).
+- **Walk, then drift**: an enemy walks to its spot at its own speeds and drifts once close.
+- **Maximum wait** (`crowd.max_wait_time`): an enemy that has waited longer goes first, so a brute
+  among grunts cannot starve. The turn order is overdue first (longest first), then nearest.
+- **Right of way in the separation pass**: attackers never move; enemies with a turn push waiting
+  ones aside.
+- **A wave's queue is filled as its banner starts** (found by T037), so a reload during a banner
+  applies from the next wave, as the tuning contract says.
 
 ## Project Structure
 
@@ -199,7 +212,7 @@ now hold (`enemy.rs`, `enemy_body.gd`, `enemy_health_bar.gd`); the scene keeps t
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 | --- | --- | --- |
-| `main.tscn`, `grunt.tscn`, `brute.tscn` and the Input Map may be changed by the agent rather than by hand in the editor (Tech: "Scenes, nodes and animation are built in the Godot editor"), as in M0–M3, if the owner hands those tasks over at the start of `/speckit-implement`. | The agent cannot use the editor GUI; M3's method (`ProjectSettings` for actions, `PackedScene.pack` + `ResourceSaver.save` for scenes, small text edits for type and script paths) produces ordinary `.tscn` files that open in the editor. | Building by hand in the editor stays the default for the owner's own tasks. |
+| `main.tscn`, `grunt.tscn`, `brute.tscn` and the Input Map were changed by the agent rather than by hand in the editor (Tech: "Scenes, nodes and animation are built in the Godot editor"), as in M0–M3: the owner handed those tasks over at the start of `/speckit-implement`. Done: the F7 and F8 actions (`project.godot`); `grunt.tscn` retyped to `Enemy` with `kind`; the new `brute.tscn`; in `main.tscn`, `WaveDirector` replacing `GruntSpawner`, the `WaveBanner` and `ScoreLabel` labels, the Game Over `Score`, `Wave` and `Best` labels, the overlay's `director` and the debug panel moved to 84 px. | The agent cannot use the editor GUI; M3's method (`ProjectSettings` for actions, `PackedScene.pack` + `ResourceSaver.save` for scenes, small text edits for type and script paths) produces ordinary `.tscn` files that open in the editor. | Building by hand in the editor stays the default for the owner's own tasks. |
 
 ## Follow-ups (outside M4a)
 

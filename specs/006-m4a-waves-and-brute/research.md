@@ -82,6 +82,12 @@ during planning (see [plan.md, Spec and input alignment](plan.md#spec-and-input-
   binds (M3 R8).
 - **Alternatives**: first come, first served (the spec's earlier answer; changed by the owner);
   skipping to the next enemy that fits (rejected: a brute could starve behind a stream of grunts).
+- *Found during implementation* (owner's answers, spec Clarifications): pure "nearest" gave the
+  turn straight back to the enemy that had just attacked, and could leave a brute waiting for
+  ever. So an enemy whose turn ended (or that was stunned) is `Retreating` until it is back at its
+  spot, and enemies that have waited at least `crowd.max_wait_time` go first, longest first
+  (`turn_order`, `TurnRequest` in `crowd.rs`). The grant still stops at the first enemy that does
+  not fit.
 
 ## R6. The waiting spot and drift
 
@@ -94,6 +100,11 @@ during planning (see [plan.md, Spec and input alignment](plan.md#spec-and-input-
   clarification Q3's circling. It reads clearly: enemies from the left wait on the left.
 - **Alternatives**: circling the hero (rejected by the owner: needs a wander rule, more separation
   work and more tests).
+- *Found during implementation* (owner's answer): drifting from the screen edge at 40 px/s took
+  about 11 s, so an enemy now walks to its spot at its own speeds until it is within the
+  separation distance, then drifts (`spot_step`). A retreat ends near the spot or, when a crowded
+  side keeps it off the spot, once it is the waiting distance less the separation distance from
+  the hero (`back_at_spot`).
 
 ## R7. Keeping apart
 
@@ -113,6 +124,9 @@ during planning (see [plan.md, Spec and input alignment](plan.md#spec-and-input-
 - **Alternatives**: Godot physics bodies with collision (rejected: the game has no physics bodies,
   Y-sort and hit rules are hand-made, and collisions would also block the hero); per-enemy steering
   (rejected: each enemy would need every other's position, the same O(n²) spread over n nodes).
+- *Found during implementation*: a waiting enemy at its spot could hold an approaching one off
+  its line for good, so the pass ranks bodies (`Give`): attacking enemies hold, approaching ones
+  press waiting ones aside, waiting, retreating and stunned ones yield; equals split the push.
 - **Physics order**: the director sits after `World` in `main.tscn` and sets
   `process_physics_priority = 1`, so it always runs after the enemies.
 
@@ -132,11 +146,11 @@ during planning (see [plan.md, Spec and input alignment](plan.md#spec-and-input-
 
     | From | Condition | To | Spawn |
     | --- | --- | --- | --- |
-    | `Banner` | countdown ends | `Fighting`, the wave's queue added after any F3/F7 kinds, timer 0 | — |
+    | `Banner` | countdown ends | `Fighting`, timer 0 (the queue was filled as the banner started; F3/F7 kinds go in front) | — |
     | `Fighting` | queue not empty, timer ran out, `living < max_on_screen` | same, timer = `spawn_interval` | front of queue |
     | `Fighting` | queue empty and `living == 0` | `Breather(breather_time)`; `wave_cleared(n)` | — |
     | `Breather` | `living > 0` (F3/F7) | `Fighting` (same wave, empty queue) | — |
-    | `Breather` | countdown ends | `Banner(banner_time)`, `n + 1`; `wave_started(n + 1)` | — |
+    | `Breather` | countdown ends | `Banner(banner_time)`, `n + 1`, its queue filled; `wave_started(n + 1)` | — |
 
     The run starts in `Banner` for wave 1 (`wave_started(1)` at once). `living` counts the
     director's enemies that are not `Dying`; entering ones count.

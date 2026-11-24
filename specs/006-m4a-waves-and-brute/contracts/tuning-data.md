@@ -65,14 +65,15 @@ or `waves.list[2].grunts`.
     "max_attack_tokens": 2,
     "waiting_distance": 180,
     "drift_speed": 40,
-    "separation_radius": 56
+    "separation_radius": 56,
+    "max_wait_time": 4.0
   }
 }
 ```
 
 Units: times in seconds, sizes, distances and speeds in pixels (per second), health and damage in
-points, resistance a fraction. Starting values are data, not requirements; the owner retunes them
-(spec, Assumptions). With them the brute takes 12 hero blows (grunt 3), hits for 35 (grunt 15),
+points, resistance a fraction. Values are data, not requirements (spec, Assumptions). These are the
+values M4a shipped with: the owner's balance playtest (T040) kept the starting values unchanged. With them the brute takes 12 hero blows (grunt 3), hits for 35 (grunt 15),
 winds up 0.7 s (grunt 0.45 s), and a blow outside its attack pushes it 15 px and stuns it 0.1 s.
 
 ## Where M3's values went
@@ -101,7 +102,8 @@ Every number must be finite; every value is required. M3's rules stay for `hero`
 | `waves.spawn_interval`, `breather_time`, `banner_time` | `>= 0` |
 | `crowd.max_attack_tokens` | a whole number, `>= 1` |
 | `crowd.waiting_distance` | `> 0` |
-| `crowd.drift_speed`, `crowd.separation_radius` | `>= 0` (0 holds still / turns the pass off) |
+| `crowd.drift_speed`, `crowd.separation_radius` | `>= 0` (0 stops a waiting enemy once at its spot / turns the pass off) |
+| `crowd.max_wait_time` | `>= 0` (0: turns go to the longest waiting) |
 
 ## Warnings (accepted, not rejected)
 
@@ -122,7 +124,7 @@ overlay shows the first.
   its queue. `spawn_interval`: the next spawn. `breather_time`, `banner_time`: the next breather or
   banner. `max_on_screen`: the next spawn.
 - `crowd.max_attack_tokens`: the next grant; holders keep their tokens. `waiting_distance`,
-  `drift_speed`, `separation_radius`: the next tick.
+  `drift_speed`, `separation_radius`: the next tick. `max_wait_time`: the next grant.
 
 Errors follow M2a: one message naming the field path and the reason, for example
 `enemies.brute.attack_token_cost: must be at most crowd.max_attack_tokens (2), got 3`.
