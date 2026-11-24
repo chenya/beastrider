@@ -6,9 +6,11 @@ extends CanvasLayer
 ## come from the Input Map actions [code]debug_toggle_overlay[/code] and
 ## [code]debug_reload_tuning[/code], never from key codes. The result of each reload appears in
 ## the message spot, which is visible whether the panel is open or not, with any tuning warning
-## after it. F2 shows the hitboxes, F3 sends a grunt, F4 refills the hero's health and F6 adds a
-## training dummy (actions [code]debug_show_hitboxes[/code], [code]debug_spawn_grunt[/code],
-## [code]debug_refill_health[/code] and [code]debug_spawn_dummy[/code]); the panel also counts hits
+## after it. F2 shows the hitboxes, F3 sends a grunt and F7 a brute into the current wave, F4
+## refills the hero's health, F6 adds a training dummy and F8 ends the wave and starts the next
+## (actions [code]debug_show_hitboxes[/code], [code]debug_spawn_grunt[/code],
+## [code]debug_spawn_brute[/code], [code]debug_refill_health[/code],
+## [code]debug_spawn_dummy[/code] and [code]debug_next_wave[/code]); the panel also counts hits
 ## landed.
 
 ## How long "Tuning reloaded" stays on screen, in seconds. Debug presentation, not tuning.
@@ -26,8 +28,8 @@ const RELOADED_MESSAGE := "Tuning reloaded"
 @export var world: Node2D
 ## The training dummy scene F6 adds. Set in the editor.
 @export var dummy_scene: PackedScene
-## The spawner F3 asks for a grunt. Set in the editor.
-@export var spawner: GruntSpawner
+## The director F3, F7 and F8 act on. Set in the editor.
+@export var director: WaveDirector
 
 # Clears the "Tuning reloaded" message after RELOADED_MESSAGE_SECONDS.
 var _message_timer := Timer.new()
@@ -94,7 +96,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		hitboxes.visible = not hitboxes.visible
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("debug_spawn_grunt"):
-		spawner.spawn_now()
+		director.spawn_grunt()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("debug_spawn_brute"):
+		director.spawn_brute()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("debug_next_wave"):
+		director.skip_wave()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("debug_refill_health"):
 		hero.refill_health()

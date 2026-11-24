@@ -13,6 +13,9 @@
 [ext_resource type="Script" path="res://ui/health_bar.gd" id="9_2cqfq"]
 [ext_resource type="Script" path="res://ui/kills_label.gd" id="10_yaehf"]
 [ext_resource type="Script" path="res://ui/game_over.gd" id="11_074og"]
+[ext_resource type="PackedScene" path="res://world/brute.tscn" id="12_brute"]
+[ext_resource type="Script" path="res://ui/wave_banner.gd" id="13_wbann"]
+[ext_resource type="Script" path="res://ui/score_label.gd" id="14_score"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_cegan"]
 resource_local_to_scene = true
@@ -67,8 +70,9 @@ color = Color(0.9098039, 0.4745098, 0.16862746, 1)
 polygon = PackedVector2Array(-24, -96, 24, -96, 24, 0, -24, 0)
 script = ExtResource("4_w48qg")
 
-[node name="GruntSpawner" type="GruntSpawner" parent="." unique_id=395351920 node_paths=PackedStringArray("world")]
+[node name="WaveDirector" type="WaveDirector" parent="." unique_id=395351920 node_paths=PackedStringArray("world")]
 grunt_scene = ExtResource("5_vivmo")
+brute_scene = ExtResource("12_brute")
 world = NodePath("../World")
 
 [node name="DebugMarkers" type="Node2D" parent="." unique_id=1656156852 node_paths=PackedStringArray("hero")]
@@ -115,6 +119,31 @@ offset_bottom = 34.0
 text = "Kills: 0"
 script = ExtResource("10_yaehf")
 
+[node name="ScoreLabel" type="Label" parent="Hud" unique_id=1402957713]
+offset_left = 16.0
+offset_top = 56.0
+offset_right = 16.0
+offset_bottom = 56.0
+text = "Score: 0"
+script = ExtResource("14_score")
+
+[node name="WaveBanner" type="Label" parent="Hud" unique_id=1873401157 node_paths=PackedStringArray("director")]
+visible = false
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -160.0
+offset_top = 96.0
+offset_right = 160.0
+offset_bottom = 151.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 40
+text = "Wave 1"
+horizontal_alignment = 1
+script = ExtResource("13_wbann")
+director = NodePath("../../WaveDirector")
+
 [node name="GameOver" type="CanvasLayer" parent="." unique_id=607060254]
 layer = 2
 script = ExtResource("11_074og")
@@ -134,7 +163,19 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 48
 horizontal_alignment = 1
 
+[node name="Score" type="Label" parent="GameOver/Box" unique_id=1735004821]
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="Wave" type="Label" parent="GameOver/Box" unique_id=896512347]
+layout_mode = 2
+horizontal_alignment = 1
+
 [node name="Kills" type="Label" parent="GameOver/Box" unique_id=100920498]
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="Best" type="Label" parent="GameOver/Box" unique_id=1268340975]
 layout_mode = 2
 horizontal_alignment = 1
 
@@ -142,7 +183,7 @@ horizontal_alignment = 1
 layout_mode = 2
 horizontal_alignment = 1
 
-[node name="DebugOverlay" type="CanvasLayer" parent="." unique_id=1270742065 node_paths=PackedStringArray("hero", "markers", "hitboxes", "world", "spawner")]
+[node name="DebugOverlay" type="CanvasLayer" parent="." unique_id=1270742065 node_paths=PackedStringArray("hero", "markers", "hitboxes", "world", "director")]
 layer = 3
 script = ExtResource("4_lquwl")
 hero = NodePath("../World/Hero")
@@ -150,13 +191,13 @@ markers = NodePath("../DebugMarkers")
 hitboxes = NodePath("../DebugHitboxes")
 world = NodePath("../World")
 dummy_scene = ExtResource("3_272bh")
-spawner = NodePath("../GruntSpawner")
+director = NodePath("../WaveDirector")
 
 [node name="Panel" type="PanelContainer" parent="DebugOverlay" unique_id=2044389230]
 offset_left = 16.0
-offset_top = 64.0
+offset_top = 84.0
 offset_right = 16.0
-offset_bottom = 64.0
+offset_bottom = 84.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_7mycd")
 

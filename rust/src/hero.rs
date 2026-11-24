@@ -4,7 +4,7 @@
 //! scene only sets where it starts and what it looks like. Tuning values are read from the `Tuning`
 //! autoload when used, never kept beyond one swing, so a reload reaches the hero on its next tick
 //! or next swing. Nothing here assumes a single player: every input action is built from
-//! `player_index`, and grunts reach heroes through the players' group (constitution, Principle
+//! `player_index`, and enemies reach heroes through the players' group (constitution, Principle
 //! VII).
 
 use godot::classes::{INode2D, Input, InputMap, Node2D, Polygon2D};
@@ -531,7 +531,7 @@ impl Hero {
             .into_iter()
             .filter_map(|fighter| match fighter {
                 FighterRef::Dummy(dummy) => Some(dummy),
-                FighterRef::Hero(_) | FighterRef::Grunt(_) => None,
+                FighterRef::Hero(_) | FighterRef::Enemy(_) => None,
             })
             .collect()
     }

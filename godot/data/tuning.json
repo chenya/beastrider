@@ -18,22 +18,50 @@
       "knockback_time": 0.2
     }
   },
-  "grunt": {
-    "horizontal_speed": 150,
-    "vertical_speed": 90,
-    "max_health": 30,
-    "hurtbox_width": 52,
-    "hurtbox_height": 100,
-    "hit_stun_time": 0.3,
-    "attack": {
-      "wind_up_time": 0.45,
-      "active_time": 0.1,
-      "recovery_time": 0.4,
-      "reach": 60,
-      "height": 60,
-      "damage": 15,
-      "knockback_distance": 80,
-      "knockback_time": 0.25
+  "enemies": {
+    "grunt": {
+      "horizontal_speed": 150,
+      "vertical_speed": 90,
+      "max_health": 30,
+      "hurtbox_width": 52,
+      "hurtbox_height": 100,
+      "hit_stun_time": 0.3,
+      "knockback_resistance": 0,
+      "interruptible": true,
+      "attack_token_cost": 1,
+      "points": 10,
+      "attack": {
+        "wind_up_time": 0.45,
+        "active_time": 0.1,
+        "recovery_time": 0.4,
+        "reach": 60,
+        "height": 60,
+        "damage": 15,
+        "knockback_distance": 80,
+        "knockback_time": 0.25
+      }
+    },
+    "brute": {
+      "horizontal_speed": 100,
+      "vertical_speed": 60,
+      "max_health": 120,
+      "hurtbox_width": 72,
+      "hurtbox_height": 140,
+      "hit_stun_time": 0.4,
+      "knockback_resistance": 0.75,
+      "interruptible": false,
+      "attack_token_cost": 2,
+      "points": 30,
+      "attack": {
+        "wind_up_time": 0.7,
+        "active_time": 0.12,
+        "recovery_time": 0.6,
+        "reach": 75,
+        "height": 80,
+        "damage": 35,
+        "knockback_distance": 120,
+        "knockback_time": 0.3
+      }
     }
   },
   "dummy": {
@@ -52,7 +80,43 @@
     "shake_time": 0.15
   },
   "run": {
-    "respawn_delay": 1.5,
     "death_fade_time": 0.5
+  },
+  "waves": {
+    "list": [
+      {
+        "grunts": 2,
+        "brutes": 0
+      },
+      {
+        "grunts": 3,
+        "brutes": 0
+      },
+      {
+        "grunts": 4,
+        "brutes": 0
+      },
+      {
+        "grunts": 3,
+        "brutes": 1
+      },
+      {
+        "grunts": 4,
+        "brutes": 1
+      }
+    ],
+    "extra_grunts_per_wave": 1,
+    "brute_every_waves": 3,
+    "spawn_interval": 0.6,
+    "breather_time": 2.0,
+    "banner_time": 1.5,
+    "max_on_screen": 10
+  },
+  "crowd": {
+    "max_attack_tokens": 2,
+    "waiting_distance": 180,
+    "drift_speed": 40,
+    "separation_radius": 56,
+    "max_wait_time": 4.0
   }
 }

@@ -1,8 +1,10 @@
-//! The run: from the first grunt to the hero's fall, and the restart that begins the next one.
+//! The run: from wave 1 to the hero's fall, and the restart that begins the next one.
 //!
 //! It is the `Run` autoload, so it outlives the scene: the restart reloads the scene, which
-//! rebuilds the hero, the spawner, the HUD and the Game Over screen, and leaves nothing of the
-//! old run behind. The tuning autoload is not reloaded, so values changed with F5 survive.
+//! rebuilds the hero, the wave director, the HUD and the Game Over screen, and leaves nothing of
+//! the old run behind. The tuning autoload is not reloaded, so values changed with F5 survive, and
+//! neither is this one, so the session best survives until the game closes. Nothing is written to
+//! disk.
 
 use godot::classes::{INode, Input, InputMap, Node};
 use godot::prelude::*;
@@ -18,25 +20,34 @@ const HIT_STOP_PATH: &str = "/root/HitStop";
 /// Whether the run is still being played.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunState {
-    /// The hero is alive; grunts hunt, the spawner spawns.
+    /// The hero is alive; enemies hunt, the waves come.
     Playing,
     /// The hero has fallen; only the restart does anything.
     GameOver,
 }
 
-/// The run's state and kill count, with no Godot types, so its rules are unit-tested.
+/// The run's state, kills, score and wave, and the session best, with no Godot types, so its
+/// rules are unit-tested.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RunRecord {
     state: RunState,
     kills: i64,
+    score: i64,
+    /// The wave whose banner last started; 0 before the first.
+    wave: i64,
+    /// The highest score of any run this session, this one counted once it ends.
+    best: i64,
 }
 
 impl RunRecord {
-    /// A fresh run: playing, no kills.
+    /// A fresh session: playing, nothing counted, no best yet.
     pub fn new() -> Self {
         Self {
             state: RunState::Playing,
             kills: 0,
+            score: 0,
+            wave: 0,
+            best: 0,
         }
     }
 
@@ -45,33 +56,68 @@ impl RunRecord {
         self.state
     }
 
-    /// Grunts killed this run.
+    /// Enemies killed this run.
     pub fn kills(&self) -> i64 {
         self.kills
     }
 
-    /// Counts one kill. A grunt adds its kill when it starts dying, so only while playing.
-    pub fn add_kill(&mut self) {
-        match self.state {
-            RunState::Playing => self.kills += 1,
-            RunState::GameOver => {}
-        }
+    /// Points scored this run.
+    pub fn score(&self) -> i64 {
+        self.score
     }
 
-    /// Ends the run; true only the first time, so `game_over` is announced once.
-    pub fn end_run(&mut self) -> bool {
+    /// The wave reached: the one whose banner last started.
+    pub fn wave(&self) -> i64 {
+        self.wave
+    }
+
+    /// The highest score of any finished run this session.
+    pub fn best(&self) -> i64 {
+        self.best
+    }
+
+    /// Counts one kill worth `points`. An enemy adds its kill when it starts dying, so only while
+    /// playing; true if it was counted.
+    pub fn add_kill(&mut self, points: i64) -> bool {
         match self.state {
             RunState::Playing => {
-                self.state = RunState::GameOver;
+                self.kills += 1;
+                self.score += points;
                 true
             }
             RunState::GameOver => false,
         }
     }
 
-    /// Back to a fresh run.
+    /// Records the wave whose banner started, while playing.
+    pub fn set_wave(&mut self, wave: i64) {
+        match self.state {
+            RunState::Playing => self.wave = wave,
+            RunState::GameOver => {}
+        }
+    }
+
+    /// Ends the run, folding its score into the best; true only the first time, so `game_over` is
+    /// announced once.
+    pub fn end_run(&mut self) -> bool {
+        match self.state {
+            RunState::Playing => {
+                self.state = RunState::GameOver;
+                self.best = self.best.max(self.score);
+                true
+            }
+            RunState::GameOver => false,
+        }
+    }
+
+    /// Back to a fresh run, keeping the best, with this run's score folded in first (a run ended
+    /// with R counts too).
     pub fn reset(&mut self) {
-        *self = Self::new();
+        let best = self.best.max(self.score);
+        *self = Self {
+            best,
+            ..Self::new()
+        };
     }
 }
 
@@ -128,15 +174,38 @@ impl INode for RunTracker {
 
 #[godot_api]
 impl RunTracker {
-    /// Emitted once per run, when the hero falls; `kills` is the run's final kill count.
-    /// Handlers use the argument and call nothing on `Run` during the emit.
+    /// Emitted once per run, when the hero falls, with everything Game Over shows: the run's
+    /// kills, score and wave reached, and the session best with this run counted. Handlers use the
+    /// arguments and call nothing on `Run` during the emit.
     #[signal]
-    fn game_over(kills: i64);
+    fn game_over(kills: i64, score: i64, wave: i64, best: i64);
 
-    /// Grunts killed this run.
+    /// Emitted when a kill adds points, with the new score. Handlers use the argument.
+    #[signal]
+    fn score_changed(score: i64);
+
+    /// Enemies killed this run.
     #[func]
     pub fn kills(&self) -> i64 {
         self.record.kills()
+    }
+
+    /// Points scored this run.
+    #[func]
+    pub fn score(&self) -> i64 {
+        self.record.score()
+    }
+
+    /// The wave reached this run; 0 before the first banner.
+    #[func]
+    pub fn wave(&self) -> i64 {
+        self.record.wave()
+    }
+
+    /// The highest score of any finished run since the game was launched.
+    #[func]
+    pub fn best(&self) -> i64 {
+        self.record.best()
     }
 
     /// Whether the run is being played; false after the hero has fallen, until the restart.
@@ -148,8 +217,9 @@ impl RunTracker {
         }
     }
 
-    /// Starts a fresh run: state and kills reset, any freeze cleared, and the current scene
-    /// reloaded, so every fighter of the old run is gone and the spawner sends the first grunt.
+    /// Starts a fresh run: state, kills, score and wave reset (the best kept, with this run's score
+    /// folded in), any freeze cleared, and the current scene reloaded, so every fighter of the old
+    /// run is gone and the director starts wave 1.
     #[func]
     pub fn restart(&mut self) {
         self.record.reset();
@@ -167,16 +237,27 @@ impl RunTracker {
 }
 
 impl RunTracker {
-    /// Counts one kill (a grunt calls it when it starts dying).
-    pub fn add_kill(&mut self) {
-        self.record.add_kill();
+    /// Counts one kill worth `points` (an enemy calls it when it starts dying), announcing the
+    /// new score.
+    pub fn add_kill(&mut self, points: i64) {
+        if self.record.add_kill(points) {
+            let score = self.record.score();
+            self.signals().score_changed().emit(score);
+        }
+    }
+
+    /// Records the wave whose banner started (the director calls it).
+    pub fn set_wave(&mut self, wave: i64) {
+        self.record.set_wave(wave);
     }
 
     /// Ends the run when the hero falls, announcing `game_over` the first time only.
     pub fn end_run(&mut self) {
         if self.record.end_run() {
-            let kills = self.record.kills();
-            self.signals().game_over().emit(kills);
+            let r = self.record;
+            self.signals()
+                .game_over()
+                .emit(r.kills(), r.score(), r.wave(), r.best());
         }
     }
 }
@@ -186,31 +267,78 @@ mod tests {
     use super::*;
 
     #[test]
-    fn kills_count_only_while_playing() {
+    fn kills_and_points_count_only_while_playing() {
         let mut run = RunRecord::new();
-        run.add_kill();
-        run.add_kill();
-        assert_eq!(run.kills(), 2);
+        assert!(run.add_kill(10));
+        assert!(run.add_kill(30));
+        assert_eq!((run.kills(), run.score()), (2, 40));
         run.end_run();
-        run.add_kill();
-        assert_eq!(run.kills(), 2);
+        assert!(!run.add_kill(10));
+        assert_eq!((run.kills(), run.score()), (2, 40));
     }
 
     #[test]
-    fn the_run_ends_once() {
+    fn the_wave_is_set_only_while_playing() {
         let mut run = RunRecord::new();
+        assert_eq!(run.wave(), 0);
+        run.set_wave(3);
+        assert_eq!(run.wave(), 3);
+        run.end_run();
+        run.set_wave(4);
+        assert_eq!(run.wave(), 3);
+    }
+
+    #[test]
+    fn the_run_ends_once_and_sets_the_best() {
+        let mut run = RunRecord::new();
+        run.add_kill(50);
         assert!(run.end_run());
         assert_eq!(run.state(), RunState::GameOver);
+        assert_eq!(run.best(), 50);
         assert!(!run.end_run());
+        assert_eq!(run.best(), 50);
     }
 
     #[test]
-    fn restart_resets_the_run() {
+    fn restart_resets_the_run_and_keeps_the_best() {
         let mut run = RunRecord::new();
-        run.add_kill();
+        let mut bests = Vec::new();
+        for score in [50, 20, 80] {
+            run.set_wave(2);
+            run.add_kill(score);
+            run.end_run();
+            bests.push(run.best());
+            run.reset();
+            assert_eq!(
+                (run.state(), run.kills(), run.score(), run.wave()),
+                (RunState::Playing, 0, 0, 0)
+            );
+        }
+        assert_eq!(bests, [50, 50, 80]);
+        assert_eq!(run.best(), 80);
+    }
+
+    #[test]
+    fn a_run_ended_with_restart_counts_for_the_best() {
+        let mut run = RunRecord::new();
+        run.add_kill(40);
         run.end_run();
         run.reset();
-        assert_eq!(run, RunRecord::new());
-        assert_eq!((run.state(), run.kills()), (RunState::Playing, 0));
+        run.add_kill(70);
+        run.reset();
+        assert_eq!(run.best(), 70);
+        run.add_kill(10);
+        run.reset();
+        assert_eq!(run.best(), 70);
+    }
+
+    #[test]
+    fn only_add_kill_changes_kills_and_score() {
+        // skip_wave frees enemies directly and never calls add_kill, so it awards nothing.
+        let mut run = RunRecord::new();
+        run.add_kill(10);
+        let before = (run.kills(), run.score());
+        run.set_wave(5);
+        assert_eq!((run.kills(), run.score()), before);
     }
 }

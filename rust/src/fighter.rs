@@ -441,7 +441,7 @@ pub fn approach_step(
 }
 
 /// `from` moved towards `to` by at most `step`.
-fn towards(from: f32, to: f32, step: f32) -> f32 {
+pub fn towards(from: f32, to: f32, step: f32) -> f32 {
     if (to - from).abs() <= step {
         to
     } else {

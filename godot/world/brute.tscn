@@ -1,0 +1,22 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://world/flash.gdshader" id="1_ulclu"]
+[ext_resource type="Script" path="res://world/enemy_body.gd" id="2_ux0yi"]
+[ext_resource type="Script" path="res://world/enemy_health_bar.gd" id="3_802jh"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ypwr6"]
+resource_local_to_scene = true
+shader = ExtResource("1_ulclu")
+
+[node name="Brute" type="Enemy" unique_id=1127848235]
+kind = "Brute"
+
+[node name="Body" type="Polygon2D" parent="." unique_id=1906884742]
+material = SubResource("ShaderMaterial_ypwr6")
+color = Color(0.24705882, 0.41960785, 0.22745098, 1)
+polygon = PackedVector2Array(-36, -140, 36, -140, 36, 0, -36, 0)
+script = ExtResource("2_ux0yi")
+
+[node name="HealthBar" type="Node2D" parent="." unique_id=405382547]
+script = ExtResource("3_802jh")
+body_height = 140.0
