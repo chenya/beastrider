@@ -29,7 +29,9 @@ out-of-scope list as given by the owner in the `/speckit-specify` request)
 - Q: The owner's check 8 names a tuned choice between spell damage per charge and flat damage.
   What should a flat cast do with the charges spent? → A: There is no flat mode: the spell's
   damage always grows with the charges spent (damage per charge × charges). That part of check 8
-  is dropped.
+  is dropped. *(Revised during planning, by the owner: the flat mode is kept as a tuned choice. In
+  flat mode a cast still uses every charge but does a fixed amount; the starting mode is damage
+  per charge.)*
 - Q: When the hero is hit-stunned or mid-swing and the magic key is pressed, does the spell cast
   at once? → A: Yes. It casts at once from any state while the hero is alive: it cancels a swing
   and breaks a hit-stun, so the spell is an emergency escape.
@@ -38,6 +40,12 @@ out-of-scope list as given by the owner in the `/speckit-specify` request)
 - Q: Do enemies killed by the spell drop potions at the usual chance? → A: Yes, exactly like a
   kill by a blow, blue potions included; a spell that refills itself too often is held in check
   by tuning the drop chances and odds (US4).
+- Q (planning): Which enemies does the spell hit? → A: Every enemy whose feet are inside the
+  visible screen at the moment of impact. One still walking in with its feet beyond the edge is
+  not hit.
+- Q (planning, from the owner's technical input): Can a knocked-down enemy be hit? → A: Not by
+  blows, so it cannot be juggled; the spell can still hit it. When it gets up it goes back to its
+  waiting spot.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -96,7 +104,8 @@ nothing else happens.
    charge is used, the action freezes for the cast time, the screen flashes, and every enemy on
    screen takes the spell's damage and is knocked flat for the knockdown time.
 3. **Given** two casts with different numbers of charges, **Then** the cast with more charges does
-   more damage to each enemy: the damage per charge times the charges spent.
+   more damage to each enemy: the damage per charge times the charges spent (with the starting
+   damage mode; in flat mode every cast does the flat amount).
 4. **Given** an enemy's attack would land during the cast, **Then** the hero takes no damage from
    it.
 5. **Given** the spell kills enemies, **Then** each adds its points and a kill, frees any turn it
@@ -212,7 +221,8 @@ seconds by the clock (F4 to stay alive), watching the FPS. Then run the Quality 
   knocking them flat, so its damage can be read on them.
 - **Casting with no enemies in play** (a breather or a banner): the charges are used and the flash
   plays; nothing is hit.
-- **Enemies still entering from the edge**: they are in play, so the spell hits them.
+- **Enemies still entering from the edge** (planning answer): one whose feet are already on screen
+  is hit; one whose feet are still beyond the edge is not.
 - **A brute caught mid-attack by the spell** (clarified): it is knocked flat for the full knockdown
   time like any enemy; its attack is cancelled. Neither its armor nor its knockback resistance
   shortens or prevents the knockdown.
@@ -252,15 +262,18 @@ seconds by the clock (F4 to stay alive), watching the FPS. Then run the Quality 
   once from any state while the hero is alive (free, mid-swing or hit-stunned; a swing is cancelled
   and a stun ended):
   every charge is used; play freezes for the cast time (from the data); the screen flashes; then
-  every enemy in play takes the spell's damage and is knocked flat for the knockdown time (from the
-  data).
-- **FR-008**: The spell's damage to each enemy MUST be the damage per charge (from the data) times
-  the charges spent, so more charges always means more damage. There is no flat-damage mode.
+  every enemy whose feet are inside the visible screen at the impact takes the spell's damage and is
+  knocked flat for the knockdown time (from the data).
+- **FR-008**: The spell's damage to each enemy MUST follow the damage mode (from the data): with
+  damage per charge, the damage per charge times the charges spent, so more charges means more
+  damage; with flat damage, the flat amount whatever the charges. Either way every charge is
+  spent. The starting mode MUST be damage per charge.
 - **FR-009**: The hero MUST take no damage from the moment a cast starts until it ends.
 - **FR-009a**: The knockdown MUST apply to every kind alike: a brute's armor and knockback
   resistance MUST NOT shorten or prevent it, and an attack in progress (armored or not) MUST be
   cancelled.
-- **FR-010**: An enemy knocked flat MUST NOT attack or hold a turn while down; it MUST free any
+- **FR-010**: An enemy knocked flat MUST NOT attack, hold a turn or be hit by a blow while down
+  (the spell can still hit it); it MUST free any
   turn it held when knocked down, and when it gets up it MUST return to its waiting spot before it
   can be given a turn again (as an enemy whose turn ended, M4a).
 - **FR-011**: An enemy killed by the spell MUST count exactly as a kill by a blow: its points, a
@@ -273,7 +286,8 @@ seconds by the clock (F4 to stay alive), watching the FPS. Then run the Quality 
 - **FR-014**: R MUST start the fresh run with an empty meter and no potions on the ground, keeping
   M4a's other restart rules (session best kept).
 - **FR-015**: The drop chance per kind, the potion odds, the potion lifetime and blink time, the
-  pickup depth tolerance, the heal amount, the maximum charges, the spell damage per charge, the
+  pickup depth tolerance, the heal amount, the maximum charges, the damage mode, the damage per
+  charge and the flat damage, the
   cast time and the knockdown time MUST be read from the tuning data file, checked like the earlier
   values, and none may appear as a literal value in code. F5 MUST apply them with the M2a reload
   rules (all or nothing). The plan's contract gives when each takes effect.
@@ -296,8 +310,8 @@ seconds by the clock (F4 to stay alive), watching the FPS. Then run the Quality 
 - **Potion**: a pickup on the ground with a kind (health or magic), a position and depth, and the
   time left before it disappears. It belongs to no fighter.
 - **Magic charges**: the number of charges a hero holds, from 0 to the maximum; one meter per hero.
-- **Spell cast**: a short frozen moment that uses all of a hero's charges and hits every enemy in
-  play once with damage from those charges, then knocks them flat.
+- **Spell cast**: a short frozen moment that uses all of a hero's charges and hits every enemy on
+  screen once with damage from those charges (or the flat amount), then knocks them flat.
 - **Knockdown**: a time an enemy spends flat on the ground: no attacks, no turn, then back to its
   waiting spot.
 - **Potion and spell tuning**: the new values in FR-015, in the same tuning data file as before.
@@ -315,9 +329,10 @@ seconds by the clock (F4 to stay alive), watching the FPS. Then run the Quality 
   none is collected; in 10 walks over a potion that would have no effect, it stays on the ground.
 - **SC-003**: Every uncollected potion blinks during its last blink time and is gone when its
   lifetime ends, within one frame.
-- **SC-004**: In 10 casts with a full meter among at least 5 enemies, every enemy in play is hit
+- **SC-004**: In 10 casts with a full meter among at least 5 enemies, every enemy on screen is hit
   once and knocked flat, the meter is empty afterwards, and the hero's health does not drop during
-  any cast. A 3-charge cast does 3 times the damage of a 1-charge cast.
+  any cast. With damage per charge, a 3-charge cast does 3 times the damage of a 1-charge cast;
+  with flat damage, every cast does the flat amount.
 - **SC-005**: Every spell kill raises the score by the enemy's points, adds a kill and frees its
   turn; a wave whose last enemy dies to the spell clears and the breather starts.
 - **SC-006**: In 10 presses with an empty meter, the meter shakes and nothing else changes.
@@ -340,21 +355,21 @@ seconds by the clock (F4 to stay alive), watching the FPS. Then run the Quality 
 - **Target hardware is the Intel UHD 630.** The owner's check 12 says "UHD 620", but constitution
   1.3.2 corrected the target to the UHD 630, M3 and M4a were verified on it, and the brief says
   UHD 630. Check 12 is read as the UHD 630.
-- **"Every enemy on screen"** means every enemy in play, including those still entering from an
-  edge; enemies waiting in a wave's queue off screen are not yet in play and are not hit.
+- **"Every enemy on screen"** (planning answer) means every enemy whose feet are inside the visible
+  screen at the impact; enemies still beyond an edge, or waiting in a wave's queue, are not hit.
 - **The cast freeze** stops everything the impact freeze stops (fighters, waves, potion lifetimes);
   R still works during it.
 - **The magic meter starts empty** at the start of every run (check 8).
 - **Drop odds**: one red/blue split for all kinds; only the drop chance differs by kind.
-- **Check 8's flat-damage choice** is dropped (clarified): the damage always scales with the
-  charges spent, as check 4 says.
+- **Check 8's damage mode** (planning answer): kept, starting at damage per charge so check 4
+  holds with the starting values.
 - **No-go still finishes the milestone.** Check 10 makes the replaying the test of "go"; if the
   owner does not replay, the outcome "no-go" is recorded with its reason and the milestone is still
   complete, since the decision is its deliverable.
 - **Starting values** (data, not requirements; the owner retunes them): grunt drop chance about
   0.15, brute about 0.5; red/blue about 60/40; potion lifetime about 8 s, blinking for the last
   2 s; pickup depth tolerance as the hit depth tolerance (about 20 px); heal 30 of 100; maximum
-  charges 3; spell damage per charge about 20 (a 1-charge cast nearly kills a grunt, 3 charges kill
+  charges 3; damage mode per charge; spell damage per charge about 20, flat damage about 40 (a 1-charge cast nearly kills a grunt, 3 charges kill
   one and badly hurt a brute); cast time about 0.6 s; knockdown about 1.2 s.
 - **The brute-attack feel** the owner noticed in M4a (being locked in a swing when an armored attack
   lands) is not changed here; the spell and potions are the planned answers to losing fights.
