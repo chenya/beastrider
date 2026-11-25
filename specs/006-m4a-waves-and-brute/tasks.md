@@ -223,7 +223,7 @@ felt earned.
 - [X] T050 After a build, a Play and the export, run `git status`: `rust/target/`, `godot/.godot/` and `godot/export/` absent; `rust/src/grunt.rs` and `grunt_spawner.rs` gone, `enemy.rs`, `crowd.rs` and `wave_director.rs` present; the new and renamed `.gd` files with their `.uid` files, `godot/world/brute.tscn`, `godot/world/grunt.tscn`, `godot/main.tscn`, `godot/project.godot` and `godot/data/tuning.json` present to be committed
 - [X] T051 (owner) Run the full quickstart.md, scenarios 1–26, in one sitting on the target machine; scenario 25 re-checks M3 and M2b
 - [X] T052 Commit the M4a implementation on branch `feat/m4a-waves-and-brute` in small logical commits that each pass the gate on their own staged tree (for example: input actions; tuning extension with `Enemy` and the brute scene; waves and the director; the brute's weight; turns and spacing; score and best; final values and docs), staging by explicit path and reviewing `git diff --staged` before each, as the owner's git rules require. Ask the owner before committing; then `git status` must be clean (depends on T040–T051)
-- [ ] T053 After the merge, update the status line in `docs/project-brief.md` and the live brief (M4a done, M4b next) on the M4b branch, as was done after M3
+- [X] T053 After the merge, update the status line in `docs/project-brief.md` and the live brief (M4a done, M4b next) on the M4b branch, as was done after M3
 
 ---
 
