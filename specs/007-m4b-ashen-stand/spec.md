@@ -30,6 +30,14 @@ out-of-scope list as given by the owner in the `/speckit-specify` request)
   What should a flat cast do with the charges spent? → A: There is no flat mode: the spell's
   damage always grows with the charges spent (damage per charge × charges). That part of check 8
   is dropped.
+- Q: When the hero is hit-stunned or mid-swing and the magic key is pressed, does the spell cast
+  at once? → A: Yes. It casts at once from any state while the hero is alive: it cancels a swing
+  and breaks a hit-stun, so the spell is an emergency escape.
+- Q: Does the spell knock a brute flat like a grunt, despite its armor and knockback resistance?
+  → A: Yes. Every enemy, brutes included, is knocked flat for the full knockdown time.
+- Q: Do enemies killed by the spell drop potions at the usual chance? → A: Yes, exactly like a
+  kill by a blow, blue potions included; a spell that refills itself too often is held in check
+  by tuning the drop chances and odds (US4).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -205,10 +213,12 @@ seconds by the clock (F4 to stay alive), watching the FPS. Then run the Quality 
 - **Casting with no enemies in play** (a breather or a banner): the charges are used and the flash
   plays; nothing is hit.
 - **Enemies still entering from the edge**: they are in play, so the spell hits them.
-- **A brute caught mid-attack by the spell**: it is knocked flat like any enemy; its attack is
-  cancelled. The spell is not stopped by the brute's armor or knockback resistance.
-- **The hero is hit-stunned or mid-swing when the magic key is pressed**: the cast starts as soon as
-  the hero can act (stun over); a swing in progress is cancelled by the cast.
+- **A brute caught mid-attack by the spell** (clarified): it is knocked flat for the full knockdown
+  time like any enemy; its attack is cancelled. Neither its armor nor its knockback resistance
+  shortens or prevents the knockdown.
+- **The hero is hit-stunned or mid-swing when the magic key is pressed** (clarified): the cast starts
+  at once; a swing in progress is cancelled and a hit-stun ends. A knockback slide in progress stops
+  with it.
 - **The hero dies**: charges and potions stop mattering; the magic key and F9 do nothing at Game
   Over.
 - **R pressed during the cast freeze**: the fresh run starts anyway, with an empty meter and no
@@ -238,18 +248,24 @@ seconds by the clock (F4 to stay alive), watching the FPS. Then run the Quality 
 - **FR-006**: The HUD MUST show a magic meter next to the health bar: one pip per possible charge,
   filled for each charge held. It MUST stay still during the screen shake and work in release
   builds.
-- **FR-007**: Pressing the magic action (K, or X) with at least one charge MUST cast the spell:
+- **FR-007**: Pressing the magic action (K, or X) with at least one charge MUST cast the spell at
+  once from any state while the hero is alive (free, mid-swing or hit-stunned; a swing is cancelled
+  and a stun ended):
   every charge is used; play freezes for the cast time (from the data); the screen flashes; then
   every enemy in play takes the spell's damage and is knocked flat for the knockdown time (from the
   data).
 - **FR-008**: The spell's damage to each enemy MUST be the damage per charge (from the data) times
   the charges spent, so more charges always means more damage. There is no flat-damage mode.
 - **FR-009**: The hero MUST take no damage from the moment a cast starts until it ends.
+- **FR-009a**: The knockdown MUST apply to every kind alike: a brute's armor and knockback
+  resistance MUST NOT shorten or prevent it, and an attack in progress (armored or not) MUST be
+  cancelled.
 - **FR-010**: An enemy knocked flat MUST NOT attack or hold a turn while down; it MUST free any
   turn it held when knocked down, and when it gets up it MUST return to its waiting spot before it
   can be given a turn again (as an enemy whose turn ended, M4a).
 - **FR-011**: An enemy killed by the spell MUST count exactly as a kill by a blow: its points, a
-  kill, its turn freed, a chance of a potion, and toward clearing the wave.
+  kill, its turn freed, a potion at its kind's usual drop chance and odds (blue included), and
+  toward clearing the wave.
 - **FR-012**: Pressing the magic action with no charges MUST do nothing but a brief shake of the
   empty meter.
 - **FR-013**: In debug builds, F9 MUST fill the meter to the maximum charges during play and do
@@ -326,8 +342,6 @@ seconds by the clock (F4 to stay alive), watching the FPS. Then run the Quality 
   UHD 630. Check 12 is read as the UHD 630.
 - **"Every enemy on screen"** means every enemy in play, including those still entering from an
   edge; enemies waiting in a wave's queue off screen are not yet in play and are not hit.
-- **The spell overrides the brute's weight**: its knockdown ignores knockback resistance and armored
-  attacks. It is the slice's answer to a crowd of brutes.
 - **The cast freeze** stops everything the impact freeze stops (fighters, waves, potion lifetimes);
   R still works during it.
 - **The magic meter starts empty** at the start of every run (check 8).
