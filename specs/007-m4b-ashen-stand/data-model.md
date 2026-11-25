@@ -49,8 +49,8 @@ While `Casting`: no moving or turning; its target is invulnerable (no blow lands
 `invulnerable` countdown keeps its own time. `cast_progress()` = elapsed / `cast_time` (0 outside
 a cast).
 
-**Impact**: `damage = spell_damage(...)`; for each `FighterRef` in `team_enemies` whose feet are
-`on_screen(feet, viewport_rect)`: an `Enemy` gets `take_spell(damage, caster_x)`, a
+**Impact**: `damage = spell_damage(...)`; for each `Enemy` (not `Dying`) and `TrainingDummy` among the children of
+`World` whose feet are `on_screen(feet, viewport_rect)`: an `Enemy` gets `take_spell(damage, caster_x)`, a
 `TrainingDummy` takes `damage` as from a blow.
 
 **Pickup** (each tick the hero steps, not while `Dead`): for each node in `potions`, collect when

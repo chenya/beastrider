@@ -24,7 +24,8 @@ and restore them afterwards.
 | 1 | US1 sc. 1, FR-001, FR-002, SC-001 | F3 and F7 for 100 grunt and 50 brute kills (F4 to stay alive), counting the potions | About 15% of grunts and 50% of brutes leave a potion where they fell; about 60% red, 40% blue |
 | 2 | US1 sc. 2, FR-003, FR-004, SC-002 | Get hurt, then walk over a red potion at its depth | It vanishes; health rises by 30, never above 100 |
 | 3 | US1 sc. 3, SC-002 | Walk along a potion's position about 40 px above or below it | It stays |
-| 4 | Edge Cases, FR-004, SC-002 | At full health, walk over a red potion; with a full meter (F9), over a blue one | Each stays on the ground; collect it after a hit or a cast |
+| 4a | Edge Cases, FR-004, SC-002 | At full health, walk over a red potion | It stays on the ground; collect it after taking a hit |
+| 4b | Edge Cases, FR-004, SC-002 | With a full meter (F9), walk over a blue potion | It stays on the ground; collect it after a cast |
 | 5 | US1 sc. 4, FR-005, SC-003 | Leave a potion alone, timing it | It blinks for its last 2 s and is gone 8 s after it fell |
 | 6 | US2 sc. 1, FR-006 | Collect blue potions one by one | One pip fills per potion, up to 3 pips |
 | 7 | US2 sc. 2, FR-007, SC-004 | F9, gather five or more enemies, press K | The action freezes about 0.6 s, the screen flashes, every enemy on screen loses health and is knocked flat for about 1.2 s; the meter is empty |

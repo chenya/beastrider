@@ -247,8 +247,8 @@ seconds by the clock (F4 to stay alive), watching the FPS. Then run the Quality 
 - **FR-002**: Each dropped potion MUST be a health potion or a magic potion by the tuned odds (from
   the data). The two MUST look clearly different (red for health, blue for magic).
 - **FR-003**: The hero MUST collect a potion when the hero's body overlaps it horizontally and
-  their depths differ by at most the pickup depth tolerance (from the data), while the hero is
-  alive. A potion at a clearly greater depth difference MUST NOT be collected.
+  their depths differ by at most the lane's depth tolerance, the same value blows use (from the
+  data), while the hero is alive. A potion at a clearly greater depth difference MUST NOT be collected.
 - **FR-004**: A health potion MUST restore the heal amount (from the data), never above the hero's
   maximum health. A magic potion MUST add one charge, never above the maximum charges (from the
   data). A potion that would have no effect (a red one at full health, a blue one at maximum
@@ -286,7 +286,7 @@ seconds by the clock (F4 to stay alive), watching the FPS. Then run the Quality 
 - **FR-014**: R MUST start the fresh run with an empty meter and no potions on the ground, keeping
   M4a's other restart rules (session best kept).
 - **FR-015**: The drop chance per kind, the potion odds, the potion lifetime and blink time, the
-  pickup depth tolerance, the heal amount, the maximum charges, the damage mode, the damage per
+  potion's pickup box size, the heal amount, the maximum charges, the damage mode, the damage per
   charge and the flat damage, the
   cast time and the knockdown time MUST be read from the tuning data file, checked like the earlier
   values, and none may appear as a literal value in code. F5 MUST apply them with the M2a reload
@@ -368,7 +368,7 @@ seconds by the clock (F4 to stay alive), watching the FPS. Then run the Quality 
   complete, since the decision is its deliverable.
 - **Starting values** (data, not requirements; the owner retunes them): grunt drop chance about
   0.15, brute about 0.5; red/blue about 60/40; potion lifetime about 8 s, blinking for the last
-  2 s; pickup depth tolerance as the hit depth tolerance (about 20 px); heal 30 of 100; maximum
+  2 s; pickups use the hit depth tolerance (about 20 px); a potion's pickup box about 24 × 32 px; heal 30 of 100; maximum
   charges 3; damage mode per charge; spell damage per charge about 20, flat damage about 40 (a 1-charge cast nearly kills a grunt, 3 charges kill
   one and badly hurt a brute); cast time about 0.6 s; knockdown about 1.2 s.
 - **The brute-attack feel** the owner noticed in M4a (being locked in a swing when an armored attack

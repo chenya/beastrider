@@ -70,8 +70,10 @@ Decisions behind [plan.md](plan.md). Each entry: the decision, why, and what els
 
 ## R6. The impact
 
-- **Decision**: At the impact the hero collects every fighter in `team_enemies` through
-  `FighterRef`, keeps those whose feet origin lies inside the visible screen rectangle
+- **Decision**: At the impact the hero collects every `Enemy` and `TrainingDummy` child of its
+  parent (`World`, where both are added), not the `team_enemies` group, because an enemy joins it
+  only once it has fully entered and one whose feet are already on screen must still be hit
+  (planning answer). It keeps those whose feet origin lies inside the visible screen rectangle
   (`get_viewport_rect()`, a pure `on_screen(feet, screen) -> bool`), and:
   - an `Enemy` (not `Dying`) takes `take_spell(damage, from_x)`: its health drops; if it dies it
     enters `Dying` and counts as any kill (points, `died`, a drop roll, its turn freed); if it
