@@ -20,6 +20,7 @@ use crate::enemy::{Enemy, EnemyKind};
 use crate::fighter::Countdown;
 use crate::hero::Hero;
 use crate::hit_stop::HitStopTimer;
+use crate::potion::Potion;
 use crate::run::RunTracker;
 use crate::tuning::{WaveSpec, WaveTuning};
 use crate::tuning_store::TuningStore;
@@ -235,7 +236,11 @@ pub struct WaveDirector {
     /// The brute scene (`res://world/brute.tscn`). Set in the editor.
     #[export]
     brute_scene: Option<Gd<PackedScene>>,
-    /// The Y-sorted node enemies are added to, before the hero. Set in the editor.
+    /// The potion scene (`res://world/potion.tscn`), added where an enemy's death left one. Set in
+    /// the editor.
+    #[export]
+    potion_scene: Option<Gd<PackedScene>>,
+    /// The Y-sorted node enemies and potions are added to, before the hero. Set in the editor.
     #[export]
     world: Option<Gd<Node2D>>,
     /// The run's waves; `None` until the first tick with tuning.
@@ -261,6 +266,7 @@ impl INode for WaveDirector {
         Self {
             grunt_scene: None,
             brute_scene: None,
+            potion_scene: None,
             world: None,
             progress: None,
             tokens: AttackTokens::new(0),
@@ -274,10 +280,14 @@ impl INode for WaveDirector {
         self.rng.randomize();
         self.base_mut()
             .set_physics_process_priority(PHYSICS_PRIORITY);
-        if self.grunt_scene.is_none() || self.brute_scene.is_none() || self.world.is_none() {
+        if self.grunt_scene.is_none()
+            || self.brute_scene.is_none()
+            || self.potion_scene.is_none()
+            || self.world.is_none()
+        {
             godot_error!(
-                "WaveDirector: `grunt_scene`, `brute_scene` and `world` must all be set in the \
-                 editor"
+                "WaveDirector: `grunt_scene`, `brute_scene`, `potion_scene` and `world` must all be \
+                 set in the editor"
             );
             return;
         }
@@ -302,10 +312,18 @@ impl INode for WaveDirector {
     }
 
     fn physics_process(&mut self, delta: f64) {
+        if self.links.is_none() {
+            return;
+        }
+        // Before the freeze check: a kill freezes play, and its potion should show at once.
+        self.place_drops();
         let Some(links) = &self.links else {
             return;
         };
-        if links.hit_stop.bind().is_frozen() || !links.run.bind().is_playing() {
+        if links.hit_stop.bind().is_frozen()
+            || links.run.bind().is_cast_frozen()
+            || !links.run.bind().is_playing()
+        {
             return;
         }
         let Some(waves) = links.tuning.bind().waves() else {
@@ -492,6 +510,50 @@ impl WaveDirector {
             .collect()
     }
 
+    /// Adds a potion where each enemy that died since the last tick left one, its feet kept in
+    /// the lane, before the hero in the world (as enemies are). F8's removals leave none, because
+    /// they are not deaths.
+    fn place_drops(&mut self) {
+        let Some(values) = self
+            .links
+            .as_ref()
+            .and_then(|links| links.tuning.bind().values())
+        else {
+            return;
+        };
+        let (Some(scene), Some(mut world)) = (self.potion_scene.clone(), self.world.clone()) else {
+            return;
+        };
+        for mut enemy in self.all_enemies() {
+            let Some((kind, position)) = enemy.bind_mut().take_drop() else {
+                continue;
+            };
+            let Some(mut potion) = scene
+                .instantiate()
+                .and_then(|node| node.try_cast::<Potion>().ok())
+            else {
+                godot_error!("WaveDirector: `potion_scene` does not have a Potion at its root");
+                return;
+            };
+            let y = position.y.clamp(values.lane_top(), values.lane_bottom());
+            potion.bind_mut().place(kind, Vector2::new(position.x, y));
+            world.add_child(&potion);
+            Self::put_before_hero(&mut world, &potion.upcast::<Node>());
+        }
+    }
+
+    /// Moves `node` before the hero among `world`'s children, so the hero wins depth ties.
+    fn put_before_hero(world: &mut Gd<Node2D>, node: &Gd<Node>) {
+        let hero_index = world
+            .get_children()
+            .iter_shared()
+            .find_map(|child| child.try_cast::<Hero>().ok())
+            .map(|hero| hero.get_index());
+        if let Some(index) = hero_index {
+            world.move_child(node, index);
+        }
+    }
+
     /// Adds one enemy of `kind` just off a random edge at a random lane depth, before the hero in
     /// the world, so the hero still wins depth ties.
     fn spawn(&mut self, kind: EnemyKind) {
@@ -529,14 +591,7 @@ impl WaveDirector {
             .randf_range(values.lane_top(), values.lane_bottom());
         enemy.bind_mut().place(edge, Vector2::new(x, depth));
         world.add_child(&enemy);
-        let hero_index = world
-            .get_children()
-            .iter_shared()
-            .find_map(|child| child.try_cast::<Hero>().ok())
-            .map(|hero| hero.get_index());
-        if let Some(index) = hero_index {
-            world.move_child(&enemy, index);
-        }
+        Self::put_before_hero(&mut world, &enemy.upcast::<Node>());
     }
 }
 

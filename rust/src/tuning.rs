@@ -5,7 +5,8 @@
 //! ([`read_raw_tuning`]) is kept apart from checking it ([`validate`]), so the rules are plain
 //! functions tested without the engine. The current values are held by
 //! [`TuningStore`](crate::tuning_store::TuningStore). The file format is described in
-//! `specs/006-m4a-waves-and-brute/contracts/tuning-data.md`.
+//! `specs/006-m4a-waves-and-brute/contracts/tuning-data.md`, with the drop chances and the
+//! `potions` and `magic` sections added in `specs/007-m4b-ashen-stand/contracts/tuning-data.md`.
 //!
 //! The hero and every enemy kind use the same key names, each in its own section with a nested
 //! `attack` object, and one reader handles them all, so their values cannot drift apart. The wave
@@ -22,6 +23,7 @@ use godot::prelude::*;
 use godot::tools::GFile;
 
 use crate::enemy::EnemyKind;
+use crate::magic::SpellDamageMode;
 
 /// Godot path of the tuning data file. This is a file location, not a tuning value.
 pub const TUNING_PATH: &str = "res://data/tuning.json";
@@ -42,6 +44,10 @@ const RUN_SECTION: &str = "run";
 const WAVES_SECTION: &str = "waves";
 /// Section holding how a crowd of enemies takes turns and keeps apart.
 const CROWD_SECTION: &str = "crowd";
+/// Section holding the potions' values.
+const POTIONS_SECTION: &str = "potions";
+/// Section holding the magic meter's and the spell's values.
+const MAGIC_SECTION: &str = "magic";
 
 /// Key of the attack object nested in each fighter's section.
 const ATTACK_KEY: &str = "attack";
@@ -60,6 +66,7 @@ const KNOCKBACK_RESISTANCE_KEY: &str = "knockback_resistance";
 const INTERRUPTIBLE_KEY: &str = "interruptible";
 const ATTACK_TOKEN_COST_KEY: &str = "attack_token_cost";
 const POINTS_KEY: &str = "points";
+const DROP_CHANCE_KEY: &str = "drop_chance";
 
 /// Keys inside a fighter's `attack` object.
 const WIND_UP_TIME_KEY: &str = "wind_up_time";
@@ -102,6 +109,29 @@ const WAITING_DISTANCE_KEY: &str = "waiting_distance";
 const DRIFT_SPEED_KEY: &str = "drift_speed";
 const SEPARATION_RADIUS_KEY: &str = "separation_radius";
 const MAX_WAIT_TIME_KEY: &str = "max_wait_time";
+
+// Keys of the `potions` section.
+const HEALTH_ODDS_KEY: &str = "health_odds";
+const LIFETIME_KEY: &str = "lifetime";
+const BLINK_TIME_KEY: &str = "blink_time";
+const HEAL_AMOUNT_KEY: &str = "heal_amount";
+const WIDTH_KEY: &str = "width";
+const HEIGHT_KEY: &str = "height";
+
+// Keys of the `magic` section.
+const MAX_CHARGES_KEY: &str = "max_charges";
+const DAMAGE_MODE_KEY: &str = "damage_mode";
+const DAMAGE_PER_CHARGE_KEY: &str = "damage_per_charge";
+const FLAT_DAMAGE_KEY: &str = "flat_damage";
+const CAST_TIME_KEY: &str = "cast_time";
+const KNOCKDOWN_TIME_KEY: &str = "knockdown_time";
+const KNOCKDOWN_PUSH_DISTANCE_KEY: &str = "knockdown_push_distance";
+const KNOCKDOWN_PUSH_TIME_KEY: &str = "knockdown_push_time";
+
+/// `magic.damage_mode` for [`SpellDamageMode::PerCharge`].
+const PER_CHARGE_MODE: &str = "per_charge";
+/// `magic.damage_mode` for [`SpellDamageMode::Flat`].
+const FLAT_MODE: &str = "flat";
 
 /// Why the tuning data could not be used. Every message names the file and the problem, and
 /// the field path where there is one, so the owner can fix the file without reading code.
@@ -241,6 +271,8 @@ pub struct RawEnemy {
     pub attack_token_cost: f64,
     /// `points`, added to the score per kill.
     pub points: f64,
+    /// `drop_chance`, a fraction.
+    pub drop_chance: f64,
 }
 
 /// One entry of `waves.list`, as read from the file.
@@ -295,6 +327,53 @@ pub struct RawCrowd {
     pub max_wait_time: f64,
 }
 
+/// The `potions` section, as read from the file.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RawPotions {
+    /// `health_odds`, a fraction.
+    pub health_odds: f64,
+    /// `lifetime`, in seconds.
+    pub lifetime: f64,
+    /// `blink_time`, in seconds.
+    pub blink_time: f64,
+    /// `heal_amount`, in health points.
+    pub heal_amount: f64,
+    /// `width`, in pixels.
+    pub width: f64,
+    /// `height`, in pixels.
+    pub height: f64,
+}
+
+/// A value that must be one of a few words, as read from the file.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RawText {
+    /// A JSON string.
+    Text(String),
+    /// Anything else, as it reads in the file, so the rejection can show it.
+    NotText(String),
+}
+
+/// The `magic` section, as read from the file.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RawMagic {
+    /// `max_charges`.
+    pub max_charges: f64,
+    /// `damage_mode`.
+    pub damage_mode: RawText,
+    /// `damage_per_charge`, in health points.
+    pub damage_per_charge: f64,
+    /// `flat_damage`, in health points.
+    pub flat_damage: f64,
+    /// `cast_time`, in seconds.
+    pub cast_time: f64,
+    /// `knockdown_time`, in seconds.
+    pub knockdown_time: f64,
+    /// `knockdown_push_distance`, in pixels.
+    pub knockdown_push_distance: f64,
+    /// `knockdown_push_time`, in seconds.
+    pub knockdown_push_time: f64,
+}
+
 /// Every tuning value as read from the file, before any rule is applied. Only [`validate`]
 /// turns them into values the game may use.
 #[derive(Debug, Clone, PartialEq)]
@@ -331,6 +410,10 @@ pub struct RawTuning {
     pub waves: RawWaves,
     /// The `crowd` section.
     pub crowd: RawCrowd,
+    /// The `potions` section.
+    pub potions: RawPotions,
+    /// The `magic` section.
+    pub magic: RawMagic,
 }
 
 /// Declares a small `Copy` group of checked `f32` tuning values with one accessor per value.
@@ -408,6 +491,79 @@ value_group! {
     }
 }
 
+value_group! {
+    /// The potions' values (`potions` section).
+    PotionTuning {
+        /// The share of drops that are health potions, from 0 to 1; the rest are magic potions.
+        health_odds,
+        /// Seconds a potion stays on the ground; always above 0.
+        lifetime,
+        /// Seconds before the end of its life that a potion blinks; at most the lifetime.
+        blink_time,
+        /// Health a health potion restores, in health points; always above 0.
+        heal_amount,
+        /// Width of a potion's pickup box, centred on its feet, in pixels; always above 0.
+        width,
+        /// Height of a potion's pickup box above its feet, in pixels; always above 0.
+        height,
+    }
+}
+
+/// The magic meter's and the spell's values (`magic` section).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MagicTuning {
+    max_charges: u32,
+    damage_mode: SpellDamageMode,
+    damage_per_charge: f32,
+    flat_damage: f32,
+    cast_time: f32,
+    knockdown_time: f32,
+    knockdown_push_distance: f32,
+    knockdown_push_time: f32,
+}
+
+impl MagicTuning {
+    /// The most charges a hero can hold; at least 1.
+    pub fn max_charges(&self) -> u32 {
+        self.max_charges
+    }
+
+    /// How the spell's damage is worked out from the charges spent.
+    pub fn damage_mode(&self) -> SpellDamageMode {
+        self.damage_mode
+    }
+
+    /// Damage per charge spent, in the per-charge mode; always above 0.
+    pub fn damage_per_charge(&self) -> f32 {
+        self.damage_per_charge
+    }
+
+    /// Damage of any cast, in the flat mode; always above 0.
+    pub fn flat_damage(&self) -> f32 {
+        self.flat_damage
+    }
+
+    /// Seconds from the cast to the impact, while play is frozen; always above 0.
+    pub fn cast_time(&self) -> f32 {
+        self.cast_time
+    }
+
+    /// Seconds an enemy stays knocked down; always above 0.
+    pub fn knockdown_time(&self) -> f32 {
+        self.knockdown_time
+    }
+
+    /// How far a knocked-down enemy slides away from the caster, in pixels; 0 for no slide.
+    pub fn knockdown_push_distance(&self) -> f32 {
+        self.knockdown_push_distance
+    }
+
+    /// How long that slide takes, in seconds; always above 0.
+    pub fn knockdown_push_time(&self) -> f32 {
+        self.knockdown_push_time
+    }
+}
+
 /// The hero's checked values (the `hero` section, without invulnerability).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FighterTuning {
@@ -466,6 +622,7 @@ pub struct EnemyTuning {
     interruptible: bool,
     attack_token_cost: u32,
     points: i64,
+    drop_chance: f32,
 }
 
 impl EnemyTuning {
@@ -517,6 +674,11 @@ impl EnemyTuning {
     /// Points its kill adds to the score; always above 0.
     pub fn points(&self) -> i64 {
         self.points
+    }
+
+    /// The chance its death leaves a potion, from 0 to 1.
+    pub fn drop_chance(&self) -> f32 {
+        self.drop_chance
     }
 
     /// Its attack.
@@ -579,6 +741,8 @@ pub struct TuningValues {
     effects: EffectsTuning,
     run: RunTuning,
     crowd: CrowdTuning,
+    potions: PotionTuning,
+    magic: MagicTuning,
 }
 
 impl TuningValues {
@@ -633,6 +797,16 @@ impl TuningValues {
     /// How a crowd takes turns and keeps apart.
     pub fn crowd(&self) -> CrowdTuning {
         self.crowd
+    }
+
+    /// The potions' values.
+    pub fn potions(&self) -> PotionTuning {
+        self.potions
+    }
+
+    /// The magic meter's and the spell's values.
+    pub fn magic(&self) -> MagicTuning {
+        self.magic
     }
 }
 
@@ -738,6 +912,8 @@ pub enum TuningWarning {
     /// The brute's wind-up is not longer than the grunt's, so it does not telegraph its heavier
     /// blow any better.
     BruteWindUpNotLonger { grunt: f32, brute: f32 },
+    /// Brutes are not more likely to drop a potion than grunts, though they are harder to kill.
+    BruteDropsNotMore { grunt: f32, brute: f32 },
 }
 
 impl fmt::Display for TuningWarning {
@@ -758,12 +934,18 @@ impl fmt::Display for TuningWarning {
                 attack_path(&enemy_section(EnemyKind::Brute), WIND_UP_TIME_KEY),
                 attack_path(&enemy_section(EnemyKind::Grunt), WIND_UP_TIME_KEY),
             ),
+            Self::BruteDropsNotMore { grunt, brute } => write!(
+                f,
+                "{}: not higher than {} ({grunt}), got {brute}; brutes should drop more often",
+                field_path(&enemy_section(EnemyKind::Brute), DROP_CHANCE_KEY),
+                field_path(&enemy_section(EnemyKind::Grunt), DROP_CHANCE_KEY),
+            ),
         }
     }
 }
 
 /// The warnings that apply to values that already passed [`validate`], in a fixed order: each
-/// enemy kind against the hero, then the brute against the grunt.
+/// enemy kind against the hero, then the brute against the grunt, then their drop chances.
 pub fn warnings(values: &TuningValues) -> Vec<TuningWarning> {
     let hero = values.hero.attack.wind_up_time;
     let grunt = values.grunt.fighter.attack.wind_up_time;
@@ -777,6 +959,10 @@ pub fn warnings(values: &TuningValues) -> Vec<TuningWarning> {
     if brute <= grunt {
         found.push(TuningWarning::BruteWindUpNotLonger { grunt, brute });
     }
+    let (grunt, brute) = (values.grunt.drop_chance, values.brute.drop_chance);
+    if brute <= grunt {
+        found.push(TuningWarning::BruteDropsNotMore { grunt, brute });
+    }
     found
 }
 
@@ -785,7 +971,8 @@ pub fn warnings(values: &TuningValues) -> Vec<TuningWarning> {
 ///
 /// Start-up and reload both call this, so the same rules apply to both. Each value is converted
 /// to `f32` first, so a huge finite number that overflows is rejected too. The rules are listed in
-/// `specs/006-m4a-waves-and-brute/contracts/tuning-data.md`; they are applied in file order, except
+/// `specs/006-m4a-waves-and-brute/contracts/tuning-data.md` and
+/// `specs/007-m4b-ashen-stand/contracts/tuning-data.md`; they are applied in file order, except
 /// that each enemy's token cost is compared with the pool once the `crowd` section has passed.
 pub fn validate(
     raw: &RawTuning,
@@ -863,6 +1050,8 @@ pub fn validate(
             ));
         }
     }
+    let potions = potions(&raw.potions)?;
+    let magic = magic(&raw.magic)?;
     let values = TuningValues {
         hero,
         invulnerability_time,
@@ -875,6 +1064,8 @@ pub fn validate(
         effects,
         run,
         crowd,
+        potions,
+        magic,
     };
     Ok((values, waves))
 }
@@ -896,13 +1087,8 @@ fn fighter(raw: &RawFighter, section: &str) -> Result<FighterTuning, TuningError
 fn enemy(raw: &RawEnemy, kind: EnemyKind) -> Result<EnemyTuning, TuningError> {
     let section = enemy_section(kind);
     let fighter = fighter(&raw.fighter, &section)?;
-    let knockback_resistance = checked(
-        raw.knockback_resistance,
-        &section,
-        KNOCKBACK_RESISTANCE_KEY,
-        "must be a finite number from 0 to 1",
-        |v| (0.0..=1.0).contains(&v),
-    )?;
+    let knockback_resistance =
+        fraction(raw.knockback_resistance, &section, KNOCKBACK_RESISTANCE_KEY)?;
     let interruptible = match &raw.interruptible {
         RawFlag::Bool(value) => *value,
         RawFlag::NotBool(shown) => {
@@ -915,12 +1101,14 @@ fn enemy(raw: &RawEnemy, kind: EnemyKind) -> Result<EnemyTuning, TuningError> {
     };
     let attack_token_cost = whole(raw.attack_token_cost, &section, ATTACK_TOKEN_COST_KEY, 1)?;
     let points = whole(raw.points, &section, POINTS_KEY, 1)?;
+    let drop_chance = fraction(raw.drop_chance, &section, DROP_CHANCE_KEY)?;
     Ok(EnemyTuning {
         fighter,
         knockback_resistance,
         interruptible,
         attack_token_cost,
         points: i64::from(points),
+        drop_chance,
     })
 }
 
@@ -1046,6 +1234,76 @@ fn crowd(raw: &RawCrowd) -> Result<CrowdTuning, TuningError> {
     })
 }
 
+/// Checks the `potions` section.
+fn potions(raw: &RawPotions) -> Result<PotionTuning, TuningError> {
+    let lifetime = positive(raw.lifetime, POTIONS_SECTION, LIFETIME_KEY)?;
+    let blink_time = non_negative(raw.blink_time, POTIONS_SECTION, BLINK_TIME_KEY)?;
+    if blink_time > lifetime {
+        return Err(invalid_value(
+            &field_path(POTIONS_SECTION, BLINK_TIME_KEY),
+            raw.blink_time.to_string(),
+            format!(
+                "must be at most {} ({})",
+                field_path(POTIONS_SECTION, LIFETIME_KEY),
+                raw.lifetime
+            ),
+        ));
+    }
+    Ok(PotionTuning {
+        health_odds: fraction(raw.health_odds, POTIONS_SECTION, HEALTH_ODDS_KEY)?,
+        lifetime,
+        blink_time,
+        heal_amount: positive(raw.heal_amount, POTIONS_SECTION, HEAL_AMOUNT_KEY)?,
+        width: positive(raw.width, POTIONS_SECTION, WIDTH_KEY)?,
+        height: positive(raw.height, POTIONS_SECTION, HEIGHT_KEY)?,
+    })
+}
+
+/// Checks the `magic` section.
+fn magic(raw: &RawMagic) -> Result<MagicTuning, TuningError> {
+    let max_charges = whole(raw.max_charges, MAGIC_SECTION, MAX_CHARGES_KEY, 1)?;
+    let damage_mode = match &raw.damage_mode {
+        RawText::Text(text) if text == PER_CHARGE_MODE => SpellDamageMode::PerCharge,
+        RawText::Text(text) if text == FLAT_MODE => SpellDamageMode::Flat,
+        RawText::Text(shown) | RawText::NotText(shown) => {
+            return Err(invalid_value(
+                &field_path(MAGIC_SECTION, DAMAGE_MODE_KEY),
+                format!("{shown:?}"),
+                format!("must be \"{PER_CHARGE_MODE}\" or \"{FLAT_MODE}\""),
+            ));
+        }
+    };
+    Ok(MagicTuning {
+        max_charges,
+        damage_mode,
+        damage_per_charge: positive(raw.damage_per_charge, MAGIC_SECTION, DAMAGE_PER_CHARGE_KEY)?,
+        flat_damage: positive(raw.flat_damage, MAGIC_SECTION, FLAT_DAMAGE_KEY)?,
+        cast_time: positive(raw.cast_time, MAGIC_SECTION, CAST_TIME_KEY)?,
+        knockdown_time: positive(raw.knockdown_time, MAGIC_SECTION, KNOCKDOWN_TIME_KEY)?,
+        knockdown_push_distance: non_negative(
+            raw.knockdown_push_distance,
+            MAGIC_SECTION,
+            KNOCKDOWN_PUSH_DISTANCE_KEY,
+        )?,
+        knockdown_push_time: positive(
+            raw.knockdown_push_time,
+            MAGIC_SECTION,
+            KNOCKDOWN_PUSH_TIME_KEY,
+        )?,
+    })
+}
+
+/// Accepts a finite fraction from 0 to 1, naming `section.key` otherwise.
+fn fraction(raw: f64, section: &str, key: &str) -> Result<f32, TuningError> {
+    checked(
+        raw,
+        section,
+        key,
+        "must be a finite number from 0 to 1",
+        |v| (0.0..=1.0).contains(&v),
+    )
+}
+
 /// Accepts a finite value `>= 0`, naming `section.key` otherwise.
 fn non_negative(raw: f64, section: &str, key: &str) -> Result<f32, TuningError> {
     checked(raw, section, key, "must be a finite number >= 0", |v| {
@@ -1111,6 +1369,8 @@ pub fn read_raw_tuning() -> Result<RawTuning, TuningError> {
     let run = object_field(&root, RUN_SECTION, RUN_SECTION)?;
     let waves = object_field(&root, WAVES_SECTION, WAVES_SECTION)?;
     let crowd = object_field(&root, CROWD_SECTION, CROWD_SECTION)?;
+    let potions = object_field(&root, POTIONS_SECTION, POTIONS_SECTION)?;
+    let magic = object_field(&root, MAGIC_SECTION, MAGIC_SECTION)?;
     Ok(RawTuning {
         hero: read_fighter(&hero, HERO_SECTION)?,
         invulnerability_time: number_in(&hero, HERO_SECTION, INVULNERABILITY_TIME_KEY)?,
@@ -1133,6 +1393,24 @@ pub fn read_raw_tuning() -> Result<RawTuning, TuningError> {
             drift_speed: number_in(&crowd, CROWD_SECTION, DRIFT_SPEED_KEY)?,
             separation_radius: number_in(&crowd, CROWD_SECTION, SEPARATION_RADIUS_KEY)?,
             max_wait_time: number_in(&crowd, CROWD_SECTION, MAX_WAIT_TIME_KEY)?,
+        },
+        potions: RawPotions {
+            health_odds: number_in(&potions, POTIONS_SECTION, HEALTH_ODDS_KEY)?,
+            lifetime: number_in(&potions, POTIONS_SECTION, LIFETIME_KEY)?,
+            blink_time: number_in(&potions, POTIONS_SECTION, BLINK_TIME_KEY)?,
+            heal_amount: number_in(&potions, POTIONS_SECTION, HEAL_AMOUNT_KEY)?,
+            width: number_in(&potions, POTIONS_SECTION, WIDTH_KEY)?,
+            height: number_in(&potions, POTIONS_SECTION, HEIGHT_KEY)?,
+        },
+        magic: RawMagic {
+            max_charges: number_in(&magic, MAGIC_SECTION, MAX_CHARGES_KEY)?,
+            damage_mode: text_in(&magic, MAGIC_SECTION, DAMAGE_MODE_KEY)?,
+            damage_per_charge: number_in(&magic, MAGIC_SECTION, DAMAGE_PER_CHARGE_KEY)?,
+            flat_damage: number_in(&magic, MAGIC_SECTION, FLAT_DAMAGE_KEY)?,
+            cast_time: number_in(&magic, MAGIC_SECTION, CAST_TIME_KEY)?,
+            knockdown_time: number_in(&magic, MAGIC_SECTION, KNOCKDOWN_TIME_KEY)?,
+            knockdown_push_distance: number_in(&magic, MAGIC_SECTION, KNOCKDOWN_PUSH_DISTANCE_KEY)?,
+            knockdown_push_time: number_in(&magic, MAGIC_SECTION, KNOCKDOWN_PUSH_TIME_KEY)?,
         },
     })
 }
@@ -1171,6 +1449,7 @@ fn read_enemy(enemies: &VarDictionary, kind: EnemyKind) -> Result<RawEnemy, Tuni
         interruptible: bool_in(&object, &section, INTERRUPTIBLE_KEY)?,
         attack_token_cost: number_in(&object, &section, ATTACK_TOKEN_COST_KEY)?,
         points: number_in(&object, &section, POINTS_KEY)?,
+        drop_chance: number_in(&object, &section, DROP_CHANCE_KEY)?,
     })
 }
 
@@ -1225,6 +1504,16 @@ fn bool_in(object: &VarDictionary, section: &str, key: &str) -> Result<RawFlag, 
     Ok(match value.get_type() {
         VariantType::BOOL => RawFlag::Bool(value.to::<bool>()),
         _ => RawFlag::NotBool(value.to_string()),
+    })
+}
+
+/// Reads the value at `section.key` as text; anything but a string is kept as text for
+/// [`validate`] to reject.
+fn text_in(object: &VarDictionary, section: &str, key: &str) -> Result<RawText, TuningError> {
+    let value = required(object, key, &field_path(section, key))?;
+    Ok(match value.get_type() {
+        VariantType::STRING => RawText::Text(value.to::<GString>().to_string()),
+        _ => RawText::NotText(value.to_string()),
     })
 }
 
@@ -1378,6 +1667,7 @@ mod tests {
             interruptible: RawFlag::Bool(resistance == 0.0),
             attack_token_cost: cost,
             points,
+            drop_chance: 0.2,
         }
     }
 
@@ -1394,7 +1684,10 @@ mod tests {
             },
             invulnerability_time: 0.8,
             grunt: raw_enemy(25.0, 0.5, 0.0, 1.0, 15.0),
-            brute: raw_enemy(90.0, 0.8, 0.6, 3.0, 40.0),
+            brute: RawEnemy {
+                drop_chance: 0.7,
+                ..raw_enemy(90.0, 0.8, 0.6, 3.0, 40.0)
+            },
             dummy_hurtbox_width: 38.0,
             dummy_hurtbox_height: 100.0,
             lane_top: TOP,
@@ -1433,6 +1726,24 @@ mod tests {
                 drift_speed: 30.0,
                 separation_radius: 48.0,
                 max_wait_time: 3.5,
+            },
+            potions: RawPotions {
+                health_odds: 0.55,
+                lifetime: 9.0,
+                blink_time: 0.8,
+                heal_amount: 25.0,
+                width: 20.0,
+                height: 28.0,
+            },
+            magic: RawMagic {
+                max_charges: 4.0,
+                damage_mode: RawText::Text("per_charge".to_string()),
+                damage_per_charge: 15.0,
+                flat_damage: 35.0,
+                cast_time: 0.5,
+                knockdown_time: 1.0,
+                knockdown_push_distance: 50.0,
+                knockdown_push_time: 0.2,
             },
         }
     }
@@ -1499,6 +1810,19 @@ mod tests {
             ("crowd.waiting_distance", |r, v| {
                 r.crowd.waiting_distance = v
             }),
+            ("potions.lifetime", |r, v| r.potions.lifetime = v),
+            ("potions.heal_amount", |r, v| r.potions.heal_amount = v),
+            ("potions.width", |r, v| r.potions.width = v),
+            ("potions.height", |r, v| r.potions.height = v),
+            ("magic.damage_per_charge", |r, v| {
+                r.magic.damage_per_charge = v
+            }),
+            ("magic.flat_damage", |r, v| r.magic.flat_damage = v),
+            ("magic.cast_time", |r, v| r.magic.cast_time = v),
+            ("magic.knockdown_time", |r, v| r.magic.knockdown_time = v),
+            ("magic.knockdown_push_time", |r, v| {
+                r.magic.knockdown_push_time = v
+            }),
         ]
     }
 
@@ -1551,6 +1875,10 @@ mod tests {
                 r.crowd.separation_radius = v
             }),
             ("crowd.max_wait_time", |r, v| r.crowd.max_wait_time = v),
+            ("potions.blink_time", |r, v| r.potions.blink_time = v),
+            ("magic.knockdown_push_distance", |r, v| {
+                r.magic.knockdown_push_distance = v
+            }),
         ]
     }
 
@@ -1626,6 +1954,133 @@ mod tests {
         assert_eq!(waves.breather_time(), 1.5);
         assert_eq!(waves.banner_time(), 1.0);
         assert_eq!(waves.max_on_screen(), 8);
+        assert_eq!(grunt.drop_chance(), 0.2);
+        assert_eq!(brute.drop_chance(), 0.7);
+        let potions = values.potions();
+        assert_eq!(potions.health_odds(), 0.55);
+        assert_eq!(potions.lifetime(), 9.0);
+        assert_eq!(potions.blink_time(), 0.8);
+        assert_eq!(potions.heal_amount(), 25.0);
+        assert_eq!((potions.width(), potions.height()), (20.0, 28.0));
+        let magic = values.magic();
+        assert_eq!(magic.max_charges(), 4);
+        assert_eq!(magic.damage_mode(), SpellDamageMode::PerCharge);
+        assert_eq!(magic.damage_per_charge(), 15.0);
+        assert_eq!(magic.flat_damage(), 35.0);
+        assert_eq!(magic.cast_time(), 0.5);
+        assert_eq!(magic.knockdown_time(), 1.0);
+        assert_eq!(magic.knockdown_push_distance(), 50.0);
+        assert_eq!(magic.knockdown_push_time(), 0.2);
+    }
+
+    // --- M4b: potions and magic. ---
+
+    /// Every field that must be a fraction from 0 to 1, with its path and a setter.
+    fn fraction_fields() -> Vec<(&'static str, Setter)> {
+        vec![
+            ("enemies.grunt.drop_chance", |r, v| r.grunt.drop_chance = v),
+            ("enemies.brute.drop_chance", |r, v| r.brute.drop_chance = v),
+            ("potions.health_odds", |r, v| r.potions.health_odds = v),
+        ]
+    }
+
+    #[test]
+    fn validate_chances_and_odds_must_be_fractions() {
+        for (path, set) in fraction_fields() {
+            for ok in [0.0, 1.0] {
+                let mut good = raw();
+                set(&mut good, ok);
+                assert!(validate(&good, SCREEN).is_ok(), "{path} = {ok} should pass");
+            }
+            for bad in [-0.1, 1.1, f64::NAN] {
+                let mut wrong = raw();
+                set(&mut wrong, bad);
+                assert_eq!(rejected(wrong).field(), path, "{path} = {bad}");
+            }
+        }
+    }
+
+    #[test]
+    fn validate_blink_time_must_fit_in_the_lifetime() {
+        let mut ok = raw();
+        ok.potions.blink_time = ok.potions.lifetime;
+        assert!(validate(&ok, SCREEN).is_ok());
+        let mut wrong = raw();
+        wrong.potions.blink_time = wrong.potions.lifetime + 0.1;
+        let error = rejected(wrong);
+        assert_eq!(error.field(), "potions.blink_time");
+        assert!(
+            error.reason().contains("potions.lifetime"),
+            "{}",
+            error.reason()
+        );
+    }
+
+    #[test]
+    fn validate_max_charges_must_be_a_whole_number_of_at_least_one() {
+        let mut ok = raw();
+        ok.magic.max_charges = 1.0;
+        assert_eq!(accepted(&ok).0.magic().max_charges(), 1);
+        for bad in [0.0, 1.5, -1.0, f64::NAN] {
+            let mut wrong = raw();
+            wrong.magic.max_charges = bad;
+            assert_eq!(rejected(wrong).field(), "magic.max_charges", "{bad}");
+        }
+    }
+
+    #[test]
+    fn validate_damage_mode_must_be_per_charge_or_flat() {
+        let mut flat = raw();
+        flat.magic.damage_mode = RawText::Text("flat".to_string());
+        assert_eq!(
+            accepted(&flat).0.magic().damage_mode(),
+            SpellDamageMode::Flat
+        );
+        for bad in [
+            RawText::Text("big".to_string()),
+            RawText::NotText("3".to_string()),
+        ] {
+            let mut wrong = raw();
+            wrong.magic.damage_mode = bad;
+            let error = rejected(wrong);
+            assert_eq!(error.field(), "magic.damage_mode");
+            assert!(
+                error.reason().contains("\"per_charge\" or \"flat\""),
+                "{}",
+                error.reason()
+            );
+        }
+    }
+
+    #[test]
+    fn warnings_flag_brutes_that_do_not_drop_more_often() {
+        for brute_chance in [0.2, 0.1] {
+            let mut low = raw();
+            low.brute.drop_chance = brute_chance;
+            let (values, _) = accepted(&low);
+            assert_eq!(
+                warnings(&values),
+                vec![TuningWarning::BruteDropsNotMore {
+                    grunt: 0.2,
+                    brute: brute_chance as f32,
+                }],
+                "{brute_chance}"
+            );
+        }
+        let message = TuningWarning::BruteDropsNotMore {
+            grunt: 0.2,
+            brute: 0.1,
+        }
+        .to_string();
+        assert!(
+            message.starts_with("enemies.brute.drop_chance"),
+            "{message}"
+        );
+        assert!(
+            message.contains("enemies.grunt.drop_chance (0.2)"),
+            "{message}"
+        );
+        assert!(message.contains("got 0.1"), "{message}");
     }
 
     // --- One passing and one failing case per rule. ---

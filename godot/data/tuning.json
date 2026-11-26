@@ -39,7 +39,8 @@
         "damage": 15,
         "knockback_distance": 80,
         "knockback_time": 0.25
-      }
+      },
+      "drop_chance": 0.15
     },
     "brute": {
       "horizontal_speed": 100,
@@ -61,7 +62,8 @@
         "damage": 35,
         "knockback_distance": 120,
         "knockback_time": 0.3
-      }
+      },
+      "drop_chance": 0.5
     }
   },
   "dummy": {
@@ -118,5 +120,23 @@
     "drift_speed": 40,
     "separation_radius": 56,
     "max_wait_time": 4.0
+  },
+  "potions": {
+    "health_odds": 0.6,
+    "lifetime": 8.0,
+    "blink_time": 2.0,
+    "heal_amount": 30,
+    "width": 24,
+    "height": 32
+  },
+  "magic": {
+    "max_charges": 3,
+    "damage_mode": "per_charge",
+    "damage_per_charge": 20,
+    "flat_damage": 40,
+    "cast_time": 0.6,
+    "knockdown_time": 1.2,
+    "knockdown_push_distance": 60,
+    "knockdown_push_time": 0.25
   }
 }

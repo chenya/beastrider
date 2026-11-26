@@ -5,11 +5,16 @@
 //! the old run behind. The tuning autoload is not reloaded, so values changed with F5 survive, and
 //! neither is this one, so the session best survives until the game closes. Nothing is written to
 //! disk.
+//!
+//! It also holds the cast freeze, counted apart from the impact freeze, which stops everyone but
+//! the caster while a spell is cast, and the random generator that rolls potion drops. A restart
+//! clears the freeze and reseeds the generator.
 
-use godot::classes::{INode, Input, InputMap, Node};
+use godot::classes::{INode, Input, InputMap, Node, RandomNumberGenerator};
 use godot::prelude::*;
 
 use crate::hit_stop::HitStopTimer;
+use crate::potion::{PotionKind, drop_from_rolls};
 
 /// The Input Map action that restarts the run, in every build.
 const RESTART_ACTION: &str = "game_restart";
@@ -127,6 +132,30 @@ impl Default for RunRecord {
     }
 }
 
+/// The spell's freeze: while any hero is casting, everything but the casters skips its step.
+/// A count, not a flag, so two heroes casting at once end it only when both are done.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CastFreeze {
+    casts: u32,
+}
+
+impl CastFreeze {
+    /// A hero started casting.
+    pub fn begin(&mut self) {
+        self.casts += 1;
+    }
+
+    /// A hero's cast ended; never below none.
+    pub fn end(&mut self) {
+        self.casts = self.casts.saturating_sub(1);
+    }
+
+    /// Whether any cast is in progress.
+    pub fn is_frozen(&self) -> bool {
+        self.casts > 0
+    }
+}
+
 /// Keeps the run's state and kills, and restarts the run on `game_restart`; registered as the
 /// autoload `Run`.
 ///
@@ -136,6 +165,10 @@ impl Default for RunRecord {
 #[class(base = Node)]
 pub struct RunTracker {
     record: RunRecord,
+    /// The spell's freeze, in its own count apart from `HitStop`, because the caster keeps running.
+    cast_freeze: CastFreeze,
+    /// Rolls every death's potion; reseeded on each restart (research R10).
+    rng: Gd<RandomNumberGenerator>,
     /// The restart action, once checked to exist; `None` if the Input Map lacks it.
     restart_action: Option<StringName>,
     base: Base<Node>,
@@ -147,12 +180,15 @@ impl INode for RunTracker {
         // A run is playing from the moment the game starts.
         Self {
             record: RunRecord::new(),
+            cast_freeze: CastFreeze::default(),
+            rng: RandomNumberGenerator::new_gd(),
             restart_action: None,
             base,
         }
     }
 
     fn ready(&mut self) {
+        self.rng.randomize();
         if InputMap::singleton().has_action(RESTART_ACTION) {
             self.restart_action = Some(StringName::from(RESTART_ACTION));
         } else {
@@ -217,12 +253,20 @@ impl RunTracker {
         }
     }
 
+    /// Whether a spell's cast is freezing play; every object but the caster skips its step.
+    #[func]
+    pub fn is_cast_frozen(&self) -> bool {
+        self.cast_freeze.is_frozen()
+    }
+
     /// Starts a fresh run: state, kills, score and wave reset (the best kept, with this run's score
-    /// folded in), any freeze cleared, and the current scene reloaded, so every fighter of the old
+    /// folded in), any freeze (an impact's or a cast's) cleared, and the current scene reloaded, so every fighter of the old
     /// run is gone and the director starts wave 1.
     #[func]
     pub fn restart(&mut self) {
         self.record.reset();
+        self.cast_freeze = CastFreeze::default();
+        self.rng.randomize();
         match self.base().try_get_node_as::<HitStopTimer>(HIT_STOP_PATH) {
             Some(mut hit_stop) => hit_stop.bind_mut().clear(),
             None => {
@@ -237,6 +281,24 @@ impl RunTracker {
 }
 
 impl RunTracker {
+    /// A hero started casting: everything but the casters stops until [`end_cast`](Self::end_cast).
+    pub fn begin_cast(&mut self) {
+        self.cast_freeze.begin();
+    }
+
+    /// A hero's cast reached its impact.
+    pub fn end_cast(&mut self) {
+        self.cast_freeze.end();
+    }
+
+    /// The potion a death leaves, if any: a drop at `chance`, then a health potion at
+    /// `health_odds`, else a magic one (see [`drop_from_rolls`]).
+    pub fn roll_drop(&mut self, chance: f32, health_odds: f32) -> Option<PotionKind> {
+        let roll_a = self.rng.randf();
+        let roll_b = self.rng.randf();
+        drop_from_rolls(chance, health_odds, roll_a, roll_b)
+    }
+
     /// Counts one kill worth `points` (an enemy calls it when it starts dying), announcing the
     /// new score.
     pub fn add_kill(&mut self, points: i64) {
@@ -297,6 +359,25 @@ mod tests {
         assert_eq!(run.best(), 50);
         assert!(!run.end_run());
         assert_eq!(run.best(), 50);
+    }
+
+    #[test]
+    fn the_cast_freeze_ends_only_when_every_cast_has_ended() {
+        let mut freeze = CastFreeze::default();
+        assert!(!freeze.is_frozen());
+        freeze.begin();
+        freeze.begin();
+        freeze.end();
+        assert!(freeze.is_frozen(), "one cast still in progress");
+        freeze.end();
+        assert!(!freeze.is_frozen());
+        freeze.end();
+        assert!(
+            !freeze.is_frozen(),
+            "an end with none in progress stays at none"
+        );
+        freeze.begin();
+        assert!(freeze.is_frozen());
     }
 
     #[test]

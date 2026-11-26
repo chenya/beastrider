@@ -7,10 +7,11 @@ extends CanvasLayer
 ## [code]debug_reload_tuning[/code], never from key codes. The result of each reload appears in
 ## the message spot, which is visible whether the panel is open or not, with any tuning warning
 ## after it. F2 shows the hitboxes, F3 sends a grunt and F7 a brute into the current wave, F4
-## refills the hero's health, F6 adds a training dummy and F8 ends the wave and starts the next
-## (actions [code]debug_show_hitboxes[/code], [code]debug_spawn_grunt[/code],
-## [code]debug_spawn_brute[/code], [code]debug_refill_health[/code],
-## [code]debug_spawn_dummy[/code] and [code]debug_next_wave[/code]); the panel also counts hits
+## refills the hero's health, F6 adds a training dummy, F8 ends the wave and starts the next and F9
+## fills the hero's magic meter (actions [code]debug_show_hitboxes[/code],
+## [code]debug_spawn_grunt[/code], [code]debug_spawn_brute[/code],
+## [code]debug_refill_health[/code], [code]debug_spawn_dummy[/code],
+## [code]debug_next_wave[/code] and [code]debug_refill_magic[/code]); the panel also counts hits
 ## landed.
 
 ## How long "Tuning reloaded" stays on screen, in seconds. Debug presentation, not tuning.
@@ -103,6 +104,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("debug_next_wave"):
 		director.skip_wave()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("debug_refill_magic"):
+		hero.refill_magic()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("debug_refill_health"):
 		hero.refill_health()

@@ -11,6 +11,7 @@ use godot::prelude::*;
 use crate::combat;
 use crate::fighter::{Hit, Knockback, Target, Team};
 use crate::hit_stop::HitStopTimer;
+use crate::run::RunTracker;
 use crate::tuning_store::TuningStore;
 
 /// Where the `Tuning` autoload lives in the scene tree.
@@ -19,10 +20,13 @@ const TUNING_PATH: &str = "/root/Tuning";
 /// Where the `HitStop` autoload lives in the scene tree.
 const HIT_STOP_PATH: &str = "/root/HitStop";
 
+/// Where the `Run` autoload lives in the scene tree.
+const RUN_PATH: &str = "/root/Run";
+
 /// A target standing in the lane, origin at its feet so Y-sort draws it by depth.
 ///
 /// It joins the enemies' group in `ready()`, so a swing finds it however it was added. If the
-/// `Tuning` or `HitStop` autoload is missing, it reports one error and never moves.
+/// `Tuning`, `HitStop` or `Run` autoload is missing, it reports one error and never moves.
 #[derive(GodotClass)]
 #[class(base = Node2D)]
 pub struct TrainingDummy {
@@ -37,6 +41,7 @@ pub struct TrainingDummy {
 struct Links {
     tuning: Gd<TuningStore>,
     hit_stop: Gd<HitStopTimer>,
+    run: Gd<RunTracker>,
 }
 
 #[godot_api]
@@ -54,11 +59,19 @@ impl INode2D for TrainingDummy {
         self.base_mut().add_to_group(Team::Enemies.group());
         let tuning = self.base().try_get_node_as::<TuningStore>(TUNING_PATH);
         let hit_stop = self.base().try_get_node_as::<HitStopTimer>(HIT_STOP_PATH);
-        match (tuning, hit_stop) {
-            (Some(tuning), Some(hit_stop)) => self.links = Some(Links { tuning, hit_stop }),
+        let run = self.base().try_get_node_as::<RunTracker>(RUN_PATH);
+        match (tuning, hit_stop, run) {
+            (Some(tuning), Some(hit_stop), Some(run)) => {
+                self.links = Some(Links {
+                    tuning,
+                    hit_stop,
+                    run,
+                });
+            }
             _ => {
                 godot_error!(
-                    "TrainingDummy: the Tuning or HitStop autoload is missing or has the wrong type"
+                    "TrainingDummy: the Tuning, HitStop or Run autoload is missing or has the \
+                     wrong type"
                 );
             }
         }
@@ -68,7 +81,7 @@ impl INode2D for TrainingDummy {
         let Some(links) = &self.links else {
             return;
         };
-        if links.hit_stop.bind().is_frozen() {
+        if links.hit_stop.bind().is_frozen() || links.run.bind().is_cast_frozen() {
             return;
         }
         let Some(values) = links.tuning.bind().values() else {
@@ -121,6 +134,17 @@ impl TrainingDummy {
         self.signals()
             .was_hit()
             .emit(hit.direction, hit.knockback.distance);
+    }
+
+    /// Takes the spell's impact: it has no health and is not knocked down, so it only flashes and
+    /// shakes the screen, as a blow does, with no push.
+    pub fn take_spell(&mut self, from_x: f32) {
+        let direction = if self.base().get_position().x >= from_x {
+            1.0
+        } else {
+            -1.0
+        };
+        self.signals().was_hit().emit(direction, 0.0);
     }
 
     /// How the hit rule sees it: always alive and never invulnerable, since it cannot die. `None`

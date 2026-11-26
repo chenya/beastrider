@@ -2,7 +2,9 @@
 //!
 //! An enemy walks in from a screen edge, lines up at the nearest hero's depth, closes in to its
 //! reach, winds up visibly and strikes. A blow stuns it and cancels its attack; at zero health it
-//! fades out and is removed, and the run counts a kill. One class serves every kind: its exported
+//! fades out and is removed, and the run counts a kill and rolls a potion drop, which the wave
+//! director places. The hero's spell damages it and, if it survives, knocks it down: it lies
+//! still, untouchable by blows and holding no turn, then gets up and retreats. One class serves every kind: its exported
 //! [`EnemyKind`] only chooses which tuning section it reads, so behaviour code never branches on
 //! the kind (research R2). Rust owns all of it; the scene only gives it a body, a health bar and
 //! their scripts, which read from it and react to its signals.
@@ -19,6 +21,7 @@ use crate::fighter::{
 use crate::fighters::FighterRef;
 use crate::hit_stop::HitStopTimer;
 use crate::movement::Speeds;
+use crate::potion::PotionKind;
 use crate::run::RunTracker;
 use crate::training_dummy::to_rect2;
 use crate::tuning::TuningValues;
@@ -74,6 +77,8 @@ pub struct Enemy {
     side: f32,
     /// The depth it waits at: its spawn depth, fixed at `place()`.
     waiting_y: f32,
+    /// The potion its death left, until the wave director places it (research R10).
+    drop: Option<PotionKind>,
     base: Base<Node2D>,
 }
 
@@ -106,6 +111,10 @@ pub enum EnemyMode {
     Recovery(Attack),
     /// Stunned by a blow: no moving or attacking until the countdown runs out.
     HitStun(Countdown),
+    /// Knocked flat by the spell: no attack, no turn, and blows cannot land, so it cannot be
+    /// juggled; it slides away from the caster, then gets up and retreats to its spot (research
+    /// R7).
+    KnockedDown(Countdown),
     /// Fading out after its health reached zero; removed when the countdown runs out.
     Dying(Countdown),
 }
@@ -121,8 +130,61 @@ impl EnemyMode {
             | Self::Waiting(_)
             | Self::Retreating
             | Self::HitStun(_)
+            | Self::KnockedDown(_)
             | Self::Dying(_) => false,
         }
+    }
+}
+
+/// How readily an enemy in `mode` gives way in the separation pass: attacking holds, approaching
+/// presses, the rest yield; `None` while it enters or dies, when it is left out.
+pub fn crowd_give(mode: EnemyMode) -> Option<Give> {
+    match mode {
+        EnemyMode::Entering | EnemyMode::Dying(_) => None,
+        EnemyMode::Waiting(_)
+        | EnemyMode::Retreating
+        | EnemyMode::HitStun(_)
+        | EnemyMode::KnockedDown(_) => Some(Give::Yields),
+        EnemyMode::Approaching => Some(Give::Presses),
+        EnemyMode::WindUp(_) | EnemyMode::Active(_) | EnemyMode::Recovery(_) => Some(Give::Holds),
+    }
+}
+
+/// One tick of lying knocked down: still down until the countdown runs out, then it retreats to
+/// its spot, so it cannot take a turn the moment it rises.
+pub fn get_up(down: &mut Countdown, delta: f32) -> EnemyMode {
+    if down.tick(delta) {
+        EnemyMode::Retreating
+    } else {
+        EnemyMode::KnockedDown(*down)
+    }
+}
+
+/// What the spell's impact does to an enemy in `mode`: a killing hit starts the fade; any other
+/// knocks it down for `knockdown_time`, whatever it was doing, an armored attack included. Its
+/// resistance plays no part: the spell floors brutes too (spec FR-009a). A dying enemy is left
+/// alone.
+pub fn enemy_after_spell(
+    mode: EnemyMode,
+    damage: Damage,
+    knockdown_time: f32,
+    death_fade_time: f32,
+) -> EnemyMode {
+    match mode {
+        EnemyMode::Dying(_) => mode,
+        EnemyMode::Entering
+        | EnemyMode::Waiting(_)
+        | EnemyMode::Retreating
+        | EnemyMode::Approaching
+        | EnemyMode::WindUp(_)
+        | EnemyMode::Active(_)
+        | EnemyMode::Recovery(_)
+        | EnemyMode::HitStun(_)
+        | EnemyMode::KnockedDown(_) => match damage {
+            Damage::Killed => EnemyMode::Dying(Countdown::new(death_fade_time)),
+            Damage::Survived => EnemyMode::KnockedDown(Countdown::new(knockdown_time)),
+            Damage::AlreadyDead => mode,
+        },
     }
 }
 
@@ -259,7 +321,10 @@ pub fn enemy_after_hit(
     death_fade_time: f32,
 ) -> (EnemyMode, bool) {
     let attacking = match mode {
-        EnemyMode::Entering | EnemyMode::Dying(_) => return (mode, false),
+        // Blows cannot land on these (an entering or downed enemy is not a target).
+        EnemyMode::Entering | EnemyMode::Dying(_) | EnemyMode::KnockedDown(_) => {
+            return (mode, false);
+        }
         EnemyMode::WindUp(_) | EnemyMode::Active(_) | EnemyMode::Recovery(_) => true,
         EnemyMode::Waiting(_)
         | EnemyMode::Retreating
@@ -289,6 +354,7 @@ impl INode2D for Enemy {
             edge: Facing::Left,
             side: -1.0,
             waiting_y: 0.0,
+            drop: None,
             base,
         }
     }
@@ -317,7 +383,7 @@ impl INode2D for Enemy {
         let Some(links) = &self.links else {
             return;
         };
-        if links.hit_stop.bind().is_frozen() {
+        if links.hit_stop.bind().is_frozen() || links.run.bind().is_cast_frozen() {
             return;
         }
         let Some(values) = links.tuning.bind().values() else {
@@ -366,6 +432,10 @@ impl INode2D for Enemy {
                     EnemyMode::HitStun(stun)
                 }
             }
+            EnemyMode::KnockedDown(mut down) => {
+                self.slide(&values, delta);
+                get_up(&mut down, delta)
+            }
         };
     }
 }
@@ -394,6 +464,7 @@ impl Enemy {
             | EnemyMode::Active(_)
             | EnemyMode::Recovery(_)
             | EnemyMode::HitStun(_)
+            | EnemyMode::KnockedDown(_)
             | EnemyMode::Dying(_) => false,
         }
     }
@@ -411,7 +482,8 @@ impl Enemy {
             | EnemyMode::WindUp(_)
             | EnemyMode::Active(_)
             | EnemyMode::Recovery(_)
-            | EnemyMode::HitStun(_) => true,
+            | EnemyMode::HitStun(_)
+            | EnemyMode::KnockedDown(_) => true,
         }
     }
 
@@ -439,7 +511,8 @@ impl Enemy {
             | EnemyMode::WindUp(_)
             | EnemyMode::Active(_)
             | EnemyMode::Recovery(_)
-            | EnemyMode::HitStun(_) => self
+            | EnemyMode::HitStun(_)
+            | EnemyMode::KnockedDown(_) => self
                 .hurtbox_rect()
                 .map_or_else(Rect2::default, |hurt| to_rect2(&hurt)),
         }
@@ -460,6 +533,7 @@ impl Enemy {
             | EnemyMode::WindUp(_)
             | EnemyMode::Recovery(_)
             | EnemyMode::HitStun(_)
+            | EnemyMode::KnockedDown(_)
             | EnemyMode::Dying(_) => Rect2::default(),
         }
     }
@@ -469,6 +543,12 @@ impl Enemy {
     #[func]
     pub fn has_turn(&self) -> bool {
         self.mode.holds_turn()
+    }
+
+    /// Whether it is knocked down by the spell; drives the knocked-down look.
+    #[func]
+    pub fn is_knocked_down(&self) -> bool {
+        matches!(self.mode, EnemyMode::KnockedDown(_))
     }
 
     /// Whether it is retreating to its spot after a turn or a stun, unable to get a turn until it
@@ -490,6 +570,7 @@ impl Enemy {
             | EnemyMode::Active(_)
             | EnemyMode::Recovery(_)
             | EnemyMode::HitStun(_)
+            | EnemyMode::KnockedDown(_)
             | EnemyMode::Dying(_) => false,
         }
     }
@@ -523,6 +604,7 @@ impl Enemy {
             | EnemyMode::Active(_)
             | EnemyMode::Recovery(_)
             | EnemyMode::HitStun(_)
+            | EnemyMode::KnockedDown(_)
             | EnemyMode::Dying(_) => return None,
         };
         let target = self.nearest_target()?;
@@ -552,6 +634,7 @@ impl Enemy {
             | EnemyMode::Active(_)
             | EnemyMode::Recovery(_)
             | EnemyMode::HitStun(_)
+            | EnemyMode::KnockedDown(_)
             | EnemyMode::Dying(_) => {}
         }
     }
@@ -560,12 +643,7 @@ impl Enemy {
     /// approaching presses, waiting, retreating and stunned yield), or `None` while it enters or
     /// dies, when it is left out.
     pub fn crowd_body(&self) -> Option<Body> {
-        let give = match self.mode {
-            EnemyMode::Entering | EnemyMode::Dying(_) => return None,
-            EnemyMode::Waiting(_) | EnemyMode::Retreating | EnemyMode::HitStun(_) => Give::Yields,
-            EnemyMode::Approaching => Give::Presses,
-            EnemyMode::WindUp(_) | EnemyMode::Active(_) | EnemyMode::Recovery(_) => Give::Holds,
-        };
+        let give = crowd_give(self.mode)?;
         let position = self.base().get_position();
         Some(Body {
             x: position.x,
@@ -591,8 +669,67 @@ impl Enemy {
             hurtbox: self.hurtbox_rect()?,
             feet_y: self.base().get_position().y,
             alive: self.is_alive(),
-            invulnerable: false,
+            // Downed by the spell: blows cannot land, so it cannot be juggled.
+            invulnerable: self.is_knocked_down(),
         })
+    }
+
+    /// Takes the spell's impact from a caster at `from_x` (research R6, R7): health drops by
+    /// `damage`; a kill counts like a blow's (points, a kill, a potion roll); a survivor is knocked
+    /// down for `magic.knockdown_time` and slides `magic.knockdown_push_distance` away from the
+    /// caster, its resistance and armor ignored. `was_hit` is emitted with that slide, so the
+    /// flash and shake play as for a blow.
+    pub fn take_spell(&mut self, damage: f32, from_x: f32) {
+        let Some(links) = &self.links else {
+            return;
+        };
+        let Some(values) = links.tuning.bind().values() else {
+            return;
+        };
+        let mut run = links.run.clone();
+        let Some(health) = &mut self.health else {
+            return;
+        };
+        let damage = health.damage(damage);
+        let magic = values.magic();
+        let was_entering = self.mode == EnemyMode::Entering;
+        self.mode = enemy_after_spell(
+            self.mode,
+            damage,
+            magic.knockdown_time(),
+            values.run().death_fade_time(),
+        );
+        let x = self.base().get_position().x;
+        let direction = if x >= from_x { 1.0 } else { -1.0 };
+        let strength = match self.mode {
+            EnemyMode::KnockedDown(_) => {
+                let push = KnockbackSpec {
+                    distance: magic.knockdown_push_distance(),
+                    time: magic.knockdown_push_time(),
+                };
+                self.knockback = Knockback::start(x, direction, push);
+                // An enemy floored while still walking in joins the enemies now, so blows can
+                // reach it once it rises.
+                if was_entering {
+                    self.base_mut().add_to_group(Team::Enemies.group());
+                }
+                push.distance
+            }
+            EnemyMode::Entering
+            | EnemyMode::Waiting(_)
+            | EnemyMode::Retreating
+            | EnemyMode::Approaching
+            | EnemyMode::WindUp(_)
+            | EnemyMode::Active(_)
+            | EnemyMode::Recovery(_)
+            | EnemyMode::HitStun(_)
+            | EnemyMode::Dying(_) => 0.0,
+        };
+        self.signals().was_hit().emit(direction, strength);
+        match damage {
+            Damage::Killed => self.count_death(&values, &mut run),
+            Damage::Survived | Damage::AlreadyDead => {}
+        }
     }
 
     /// Takes a blow from a hero: health drops and `was_hit` is emitted with the push it takes (0
@@ -630,13 +767,26 @@ impl Enemy {
         };
         self.signals().was_hit().emit(hit.direction, strength);
         match damage {
-            Damage::Killed => {
-                self.base_mut().remove_from_group(Team::Enemies.group());
-                self.signals().died().emit();
-                run.bind_mut().add_kill(values.enemy(self.kind).points());
-            }
+            Damage::Killed => self.count_death(&values, &mut run),
             Damage::Survived | Damage::AlreadyDead => {}
         }
+    }
+
+    /// What every death does, by a blow or the spell: it leaves the enemies, says it died, adds
+    /// its points and a kill, and rolls its potion.
+    fn count_death(&mut self, values: &TuningValues, run: &mut Gd<RunTracker>) {
+        self.base_mut().remove_from_group(Team::Enemies.group());
+        self.signals().died().emit();
+        let own = values.enemy(self.kind);
+        let mut run = run.bind_mut();
+        run.add_kill(own.points());
+        self.drop = run.roll_drop(own.drop_chance(), values.potions().health_odds());
+    }
+
+    /// The potion its death left and where it fell, once; the wave director places it.
+    pub fn take_drop(&mut self) -> Option<(PotionKind, Vector2)> {
+        let kind = self.drop.take()?;
+        Some((kind, self.base().get_position()))
     }
 
     /// One tick of walking in from its edge; joins the enemies once fully on screen.
@@ -908,6 +1058,73 @@ mod tests {
             EnemyMode::Active(attack()),
             EnemyMode::Recovery(attack()),
         ]
+    }
+
+    // --- The spell's knockdown (M4b). ---
+
+    const KNOCKDOWN: f32 = 0.9;
+
+    /// Every mode the spell can find an enemy in, but dying.
+    fn spell_targets() -> Vec<EnemyMode> {
+        let mut modes = vec![
+            EnemyMode::Entering,
+            EnemyMode::Waiting(1.5),
+            EnemyMode::Retreating,
+            EnemyMode::Approaching,
+            EnemyMode::HitStun(Countdown::new(STUN)),
+            EnemyMode::KnockedDown(Countdown::new(0.2)),
+        ];
+        modes.extend(attacking_modes());
+        modes
+    }
+
+    #[test]
+    fn the_spell_knocks_down_every_survivor_whatever_it_was_doing() {
+        // No resistance or armor goes into the rule: brutes go down like grunts.
+        for mode in spell_targets() {
+            assert_eq!(
+                enemy_after_spell(mode, Damage::Survived, KNOCKDOWN, FADE),
+                EnemyMode::KnockedDown(Countdown::new(KNOCKDOWN)),
+                "{mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_spell_kills_like_a_blow_and_leaves_the_dying_alone() {
+        for mode in spell_targets() {
+            assert_eq!(
+                enemy_after_spell(mode, Damage::Killed, KNOCKDOWN, FADE),
+                EnemyMode::Dying(Countdown::new(FADE)),
+                "{mode:?}"
+            );
+        }
+        let dying = EnemyMode::Dying(Countdown::new(0.1));
+        for damage in [Damage::Survived, Damage::Killed, Damage::AlreadyDead] {
+            assert_eq!(enemy_after_spell(dying, damage, KNOCKDOWN, FADE), dying);
+        }
+        let waiting = EnemyMode::Waiting(0.5);
+        assert_eq!(
+            enemy_after_spell(waiting, Damage::AlreadyDead, KNOCKDOWN, FADE),
+            waiting
+        );
+    }
+
+    #[test]
+    fn a_knocked_down_enemy_holds_no_turn_and_yields() {
+        let down = EnemyMode::KnockedDown(Countdown::new(KNOCKDOWN));
+        assert!(!down.holds_turn());
+        assert_eq!(crowd_give(down), Some(Give::Yields));
+    }
+
+    #[test]
+    fn a_knocked_down_enemy_gets_up_and_retreats() {
+        let mut down = Countdown::new(0.25);
+        assert_eq!(
+            get_up(&mut down, 0.125),
+            EnemyMode::KnockedDown(Countdown::new(0.125))
+        );
+        assert_eq!(get_up(&mut down, 0.125), EnemyMode::Retreating);
     }
 
     #[test]
