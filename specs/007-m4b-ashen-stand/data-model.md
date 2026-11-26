@@ -45,13 +45,16 @@ New fields: `magic: Option<MagicMeter>`. `HeroMode` gains `Casting(Cast)`,
 
 `can_cast(mode)`: `Free | Attacking | HitStun` → true; `Casting | Dead` → false.
 
+A magic press seen while the hero is frozen (impact freeze, or another hero's cast) is kept
+(`magic_pressed`) and acted on at its first step after the freeze.
+
 While `Casting`: no moving or turning; its target is invulnerable (no blow lands); the post-hit
 `invulnerable` countdown keeps its own time. `cast_progress()` = elapsed / `cast_time` (0 outside
 a cast).
 
 **Impact**: `damage = spell_damage(...)`; for each `Enemy` (not `Dying`) and `TrainingDummy` among the children of
 `World` whose feet are `on_screen(feet, viewport_rect)`: an `Enemy` gets `take_spell(damage, caster_x)`, a
-`TrainingDummy` takes `damage` as from a blow.
+`TrainingDummy` gets `take_spell(caster_x)`: a flash and shake only, as it has no health.
 
 **Pickup** (each tick the hero steps, not while `Dead`): for each node in `potions`, collect when
 `can_collect(hero_box, hero_feet_y, potion_box, potion_feet_y, lane.depth_tolerance)` and

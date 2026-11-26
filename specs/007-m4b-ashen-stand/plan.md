@@ -106,8 +106,8 @@ Resolved in the plan without a spec change:
 
 - **Getting up**: to `Retreating`, M4a's path back to the waiting spot, which meets the input's
   "returns to Waiting" without letting a risen enemy take a turn at once ([R7](research.md)).
-- **Training dummies**: the spell damages them as a blow does, without a knockdown (spec, Edge
-  Cases; [R6](research.md)).
+- **Training dummies**: they have no health, so the spell only flashes them and shakes the
+  screen, without a knockdown (spec, Edge Cases; [R6](research.md)).
 - **The push**: `magic.knockdown_push_time` added beside the input's push distance, because the
   shared `Knockback` needs both ([R13](research.md)).
 - **Pickup depth**: `lane.depth_tolerance`, the value hits use; the input's "pickup box size" is
@@ -183,7 +183,7 @@ rules live beside the director.
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 | --- | --- | --- |
-| `main.tscn`, `potion.tscn` and the Input Map may be changed by the agent rather than by hand in the editor (Tech: "Scenes, nodes and animation are built in the Godot editor"), as in M0–M4a, if the owner hands those tasks over at the start of `/speckit-implement`. | The agent cannot use the editor GUI; the M3 and M4a methods (`ProjectSettings` for actions, `PackedScene.pack` + `ResourceSaver.save` or small text edits for scenes) produce ordinary files that open in the editor. | Building by hand in the editor stays the default for the owner's own tasks. |
+| `main.tscn`, `potion.tscn` and the Input Map may be changed by the agent rather than by hand in the editor (Tech: "Scenes, nodes and animation are built in the Godot editor"), as in M0–M4a, if the owner hands those tasks over at the start of `/speckit-implement`. | The agent cannot use the editor GUI; the M3 and M4a methods (`ProjectSettings` for actions, `PackedScene.pack` + `ResourceSaver.save` or small text edits for scenes) produce ordinary files that open in the editor. | Building by hand in the editor stays the default for the owner's own tasks. Recorded at T045: the owner handed these tasks over, and the agent built `potion.tscn`, the `main.tscn` additions (the potion scene link, `Hud/MagicMeter`, the `SpellFlash` layer) and the `p1_magic` and `debug_refill_magic` actions this way. The owner's playtests (T017, T029, T033) passed with them. No other departure was found. |
 
 ## Follow-ups (outside M4b)
 

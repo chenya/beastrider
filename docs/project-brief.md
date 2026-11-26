@@ -1,6 +1,6 @@
 # Beastrider: Project Brief and Milestone Plan
 
-As of 2026-11-25. Status: M0, M1, M2a (debug overlay), M2b (hit and feel), M3 (first fight) and M4a (waves and the brute) done and merged into main (the owner is working through Spec Kit milestone by milestone, one branch each); M4b (Ashen Stand) is next. Constitution v1.3.3. The live, editable copy is the doc "Beastrider: Project Brief and Milestone Plan"; this file is the project's shared-memory copy. If the two differ, ask the user which is current. The Spec Kit constitution is in `.specify/memory/constitution.md`.
+As of 2026-11-26. Status: M0, M1, M2a (debug overlay), M2b (hit and feel), M3 (first fight) and M4a (waves and the brute) done and merged into main (the owner is working through Spec Kit milestone by milestone, one branch each); M4b (Ashen Stand) is built on branch `feat/m4b-ashen-stand`, not yet merged. M4b decision: go. The owner's reason: "The spell turned losing fights into wins without making runs easy, and I wanted another run each time." Constitution v1.3.3. The live, editable copy is the doc "Beastrider: Project Brief and Milestone Plan"; this file is the project's shared-memory copy. If the two differ, ask the user which is current. The Spec Kit constitution is in `.specify/memory/constitution.md`.
 
 ## Summary
 

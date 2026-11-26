@@ -217,8 +217,8 @@ seconds by the clock (F4 to stay alive), watching the FPS. Then run the Quality 
 - **Potions across waves**: a potion stays on the ground through breathers and banners until it is
   collected or its lifetime ends.
 - **Enemies killed by F8**: they leave no potions, as they score nothing.
-- **Training dummies** (F6): they never drop potions. The spell hits them like a blow, without
-  knocking them flat, so its damage can be read on them.
+- **Training dummies** (F6): they never drop potions. They have no health, so the spell only
+  flashes them and shakes the screen, as a blow does, without knocking them flat.
 - **Casting with no enemies in play** (a breather or a banner): the charges are used and the flash
   plays; nothing is hit.
 - **Enemies still entering from the edge** (planning answer): one whose feet are already on screen

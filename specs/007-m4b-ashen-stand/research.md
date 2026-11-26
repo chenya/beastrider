@@ -46,7 +46,11 @@ Decisions behind [plan.md](plan.md). Each entry: the decision, why, and what els
   `Casting` makes the hero's target invulnerable, apart from the post-hit `invulnerable`
   countdown, which keeps running. When the cast's countdown (`magic.cast_time`) ends, the impact
   resolves (R6), then `Run.end_cast()`, emit `spell_impact()`, back to `Free`. The hero neither
-  moves nor turns while casting. A press during `Casting` does nothing.
+  moves nor turns while casting. A press during `Casting` does nothing. A magic press made while
+  play is frozen (the impact freeze after a hit, or another hero's cast) is kept and acted on at
+  the hero's first step after it (found by T028): a press lasts one frame, and the panic press
+  right after a hit falls inside the impact freeze, so without this the emergency cast would be
+  lost.
 - **Rationale**: The owner's input and spec clarification 1 (cast at once from a stun or a swing:
   the emergency escape). Invulnerability as part of the mode means it can't leak past the cast.
 - **Alternatives**: Waiting for a stun to end (rejected by the owner); invulnerability through the
@@ -81,8 +85,8 @@ Decisions behind [plan.md](plan.md). Each entry: the decision, why, and what els
     `magic.knockdown_push_distance` over `magic.knockdown_push_time` with the shared `Knockback`,
     ignoring `knockback_resistance` and armor. It emits `was_hit(direction, strength)` so the
     flash and shake play as for a blow;
-  - a `TrainingDummy` takes the damage as from a blow (its flash, no knockdown), so the damage can
-    be read on it (spec, Edge Cases).
+  - a `TrainingDummy`, which has no health, only flashes and shakes the screen as for a blow, with
+    no push or knockdown (spec, Edge Cases).
 
   The spell hits each fighter once; it is not a `resolve_attack` swing.
 - **Rationale**: The owner's input and the planning answer (feet on screen). `FighterRef` already
@@ -114,8 +118,9 @@ Decisions behind [plan.md](plan.md). Each entry: the decision, why, and what els
   sits in the Y-sorted `World`, so depth ordering works. `place(kind, position)` sets it up before
   it enters the tree; on its first tick with tuning its lifetime starts at `potions.lifetime`. Each
   tick (unless frozen by `HitStop` or the cast) the lifetime counts down; at 0 it frees itself.
-  `#[func]`s: `kind()`, `is_blinking()` (true in the last `potions.blink_time`), `pickup_box()`.
-  One scene, `godot/world/potion.tscn`, with a `Body` script that picks its colour from `kind()`.
+  `#[func]`s: `is_blinking()` (true in the last `potions.blink_time`) and `pickup_box()`; scripts read
+  the exported `kind`.
+  One scene, `godot/world/potion.tscn`, with a `Body` script that picks its colour from the exported `kind`.
 - **Rationale**: The owner's input. A Rust node owns its countdown, so GDScript holds no state;
   `is_blinking()` rather than a remaining fraction keeps `blink_time` out of GDScript.
 - **Alternatives**: Two scenes, one per kind (rejected: they differ only in colour, which the
@@ -162,7 +167,7 @@ Decisions behind [plan.md](plan.md). Each entry: the decision, why, and what els
   - `godot/ui/spell_flash.gd` (`CanvasLayer` above the HUD with a full-screen `ColorRect`): its
     alpha follows `hero.cast_progress()` (0 to 1) while casting, peaks at `spell_impact`, then
     fades over a named presentation time.
-  - `godot/world/potion_body.gd` (on the potion's `Body`): colour by `potion.kind()`, hidden every
+  - `godot/world/potion_body.gd` (on the potion's `Body`): colour by `potion.kind`, hidden every
     other blink period while `potion.is_blinking()`.
   - `godot/world/enemy_body.gd` (extended): a flattened look while `enemy.is_knocked_down()`.
 - **Rationale**: The owner's input; Rust holds every rule and time, scripts read and react.

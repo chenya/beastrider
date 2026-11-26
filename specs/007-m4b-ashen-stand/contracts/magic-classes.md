@@ -35,8 +35,7 @@ the strength.
 
 | Member | Kind | Contract |
 | --- | --- | --- |
-| `kind` | export (`PotionKind`: `"Health"`, `"Magic"`) | Set by the director before it enters the tree. |
-| `kind() -> String` | func | For the colour. |
+| `kind` | export (`PotionKind`: `"Health"`, `"Magic"`) | Set by the director before it enters the tree; scripts read it for the colour, as `enemy.kind` in M4a. |
 | `is_blinking() -> bool` | func | True in the last `potions.blink_time` of its life. |
 | `pickup_box() -> Rect2` | func | For F2's outline; empty before tuning. |
 
@@ -81,7 +80,7 @@ Group: `potions`. No script on the root (M2b R6); scripts go on `Body`.
 | --- | --- | --- |
 | `godot/ui/magic_meter.gd` | `hero.charges()`, `hero.max_charges()` | `cast_failed_empty` (shake) |
 | `godot/ui/spell_flash.gd` | `hero.is_casting()`, `hero.cast_progress()` | `spell_impact` (peak, then fade) |
-| `godot/world/potion_body.gd` | `potion.kind()`, `potion.is_blinking()` | — |
+| `godot/world/potion_body.gd` | `potion.kind`, `potion.is_blinking()` | — |
 | `godot/world/enemy_body.gd` (extended) | `enemy.is_knocked_down()` | — |
 | `godot/debug/debug_overlay.gd` (extended) | — | F9 → `hero.refill_magic()` |
 | `godot/debug/debug_hitboxes.gd` (extended) | `potion.pickup_box()` | — |

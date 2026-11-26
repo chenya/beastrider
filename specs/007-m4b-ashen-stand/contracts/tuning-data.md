@@ -32,8 +32,9 @@ the nesting, for example `magic.damage_mode` or `enemies.brute.drop_chance`.
 ```
 
 Every other section is unchanged from M4a. Units: times in seconds, sizes and distances in pixels,
-health and damage in points, chances and odds as fractions. Starting values are data, not
-requirements; the owner retunes them (US4). With them, a 1-charge cast nearly kills a grunt (20
+health and damage in points, chances and odds as fractions. These are the final values: the owner
+played and retuned with them in US4 (T034) and kept the starting values unchanged, and the waves
+were not retuned. Values are data, not requirements. With them, a 1-charge cast nearly kills a grunt (20
 of 30), 3 charges kill a grunt and take half a brute's health (60 of 120), and a red potion
 restores 30 of the hero's 100.
 
