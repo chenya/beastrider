@@ -66,6 +66,22 @@ impl Health {
         self.current = self.max;
     }
 
+    /// Restores `amount` points, never above the maximum, and returns the points gained. A fighter
+    /// with no points left gains nothing: a potion does not raise the fallen.
+    pub fn heal(&mut self, amount: f32) -> f32 {
+        if self.is_dead() {
+            return 0.0;
+        }
+        let before = self.current;
+        self.current = (self.current + amount).min(self.max);
+        self.current - before
+    }
+
+    /// Whether no points are missing.
+    pub fn is_full(&self) -> bool {
+        self.current >= self.max
+    }
+
     /// Takes a new maximum from a tuning reload: current health is lowered to it if needed, and
     /// never raised, so a reload cannot heal.
     pub fn set_max(&mut self, max: f32) {
@@ -259,6 +275,11 @@ impl Countdown {
         Self {
             remaining: seconds.max(0.0),
         }
+    }
+
+    /// Seconds left; 0 once it has run out.
+    pub fn remaining(&self) -> f32 {
+        self.remaining
     }
 
     /// Whether time is left.
@@ -456,6 +477,28 @@ mod tests {
     // Values deliberately different from the starting values in tuning.json.
     const TICK: f32 = 1.0 / 60.0;
     const TOLERANCE: f32 = 12.0;
+
+    #[test]
+    fn heal_restores_up_to_the_maximum_and_returns_the_gain() {
+        let mut health = Health::new(80.0);
+        assert!(health.is_full());
+        assert_eq!(health.heal(25.0), 0.0, "full: nothing gained");
+        health.damage(50.0);
+        assert!(!health.is_full());
+        assert_eq!(health.heal(25.0), 25.0);
+        assert_eq!(health.current(), 55.0);
+        assert_eq!(health.heal(40.0), 25.0, "capped at the maximum");
+        assert_eq!(health.current(), 80.0);
+        assert!(health.is_full());
+    }
+
+    #[test]
+    fn heal_does_not_raise_the_dead() {
+        let mut health = Health::new(80.0);
+        health.damage(100.0);
+        assert_eq!(health.heal(25.0), 0.0);
+        assert!(health.is_dead());
+    }
 
     fn spec(wind_up: f32, active: f32, recovery: f32) -> AttackSpec {
         AttackSpec {

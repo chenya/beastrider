@@ -1,7 +1,11 @@
-//! The player-controlled hero: walks the lane, swings at enemies, and can be hurt and fall.
+//! The player-controlled hero: walks the lane, swings at enemies, collects potions, casts the
+//! spell, and can be hurt and fall.
 //!
-//! Rust owns the hero's position, facing, swing, health, stun, invulnerability and knockback; the
-//! scene only sets where it starts and what it looks like. Tuning values are read from the `Tuning`
+//! Rust owns the hero's position, facing, swing, health, magic meter, cast, stun, invulnerability
+//! and knockback; the scene only sets where it starts and what it looks like. A cast spends every
+//! charge, freezes everyone else for `magic.cast_time` through the run's cast freeze, then hits
+//! every enemy whose feet are on screen (see [`crate::magic`]); potions are found through
+//! [`POTIONS_GROUP`] and collected only when they would help. Tuning values are read from the `Tuning`
 //! autoload when used, never kept beyond one swing, so a reload reaches the hero on its next tick
 //! or next swing. Nothing here assumes a single player: every input action is built from
 //! `player_index`, and enemies reach heroes through the players' group (constitution, Principle
@@ -11,13 +15,16 @@ use godot::classes::{INode2D, Input, InputMap, Node2D, Polygon2D};
 use godot::prelude::*;
 
 use crate::combat::{self, Facing};
+use crate::enemy::Enemy;
 use crate::fighter::{
     AttackAdvance, AttackPhase, AttackSpec, AttackStep, AttackTimer, Attacker, Countdown, Damage,
     Health, Hit, Knockback, Target, Team, resolve_attack,
 };
 use crate::fighters::FighterRef;
 use crate::hit_stop::HitStopTimer;
+use crate::magic::{MagicMeter, on_screen, spell_damage};
 use crate::movement::{self, Limits, Speeds};
+use crate::potion::{POTIONS_GROUP, Potion, PotionKind, can_collect, potion_useful};
 use crate::run::RunTracker;
 use crate::training_dummy::{TrainingDummy, to_rect2};
 use crate::tuning::TuningValues;
@@ -63,6 +70,12 @@ pub struct Hero {
     knockback: Option<Knockback>,
     /// Targets hit since the game started, one per target per swing.
     hits_landed: i64,
+    /// This hero's magic charges; `None` until the first tick with tuning, which starts it empty.
+    magic: Option<MagicMeter>,
+    /// A magic press seen while play was frozen, acted on at the first step after. A press lasts
+    /// one frame, and the panic press right after a hit falls inside the impact freeze, so
+    /// without this the emergency cast would be lost.
+    magic_pressed: bool,
     base: Base<Node2D>,
 }
 
@@ -74,6 +87,9 @@ enum HeroMode {
     Attacking(Swing),
     /// Stunned by a blow: no moving or attacking until the countdown runs out.
     HitStun(Countdown),
+    /// Casting the spell: play is frozen for everyone else, the hero neither moves nor turns, and
+    /// no blow can land on it; at the end of the cast the impact resolves (research R4).
+    Casting(Cast),
     /// Fallen. Stays so until the restart reloads the scene.
     Dead,
 }
@@ -99,6 +115,26 @@ impl Swing {
     }
 }
 
+/// One cast under way.
+struct Cast {
+    /// Time to the impact.
+    timer: Countdown,
+    /// The cast's whole length, for its progress (copied at the start, so a reload applies next
+    /// cast).
+    length: f32,
+    /// The charges it spent.
+    charges: u32,
+}
+
+/// Whether a hero in `mode` may start a cast: at once from walking, a swing or a stun (the spell
+/// is an emergency escape, spec clarification), never while casting or fallen.
+fn can_cast(mode: &HeroMode) -> bool {
+    match mode {
+        HeroMode::Free | HeroMode::Attacking(_) | HeroMode::HitStun(_) => true,
+        HeroMode::Casting(_) | HeroMode::Dead => false,
+    }
+}
+
 /// What a hero checks once in `ready()`: the parts that a tuning reload cannot fix.
 struct Setup {
     actions: PlayerActions,
@@ -119,6 +155,7 @@ struct PlayerActions {
     up: StringName,
     down: StringName,
     attack: StringName,
+    magic: StringName,
 }
 
 impl PlayerActions {
@@ -141,6 +178,7 @@ impl PlayerActions {
             up: name("up")?,
             down: name("down")?,
             attack: name("attack")?,
+            magic: name("magic")?,
         })
     }
 }
@@ -160,6 +198,8 @@ impl INode2D for Hero {
             invulnerable: Countdown::default(),
             knockback: None,
             hits_landed: 0,
+            magic: None,
+            magic_pressed: false,
             base,
         }
     }
@@ -180,7 +220,17 @@ impl INode2D for Hero {
         let Some(setup) = &self.setup else {
             return;
         };
+        // Read before any freeze check, so a press during a freeze is kept for the next step.
+        if setup.run.bind().is_playing()
+            && Input::singleton().is_action_just_pressed(&setup.actions.magic)
+        {
+            self.magic_pressed = true;
+        }
         if setup.hit_stop.bind().is_frozen() {
+            return;
+        }
+        // During a cast only the casters step; another hero waits like everyone else.
+        if setup.run.bind().is_cast_frozen() && !self.is_casting() {
             return;
         }
         let Some(values) = setup.tuning.bind().values() else {
@@ -189,13 +239,22 @@ impl INode2D for Hero {
         let playing = setup.run.bind().is_playing();
         let attack_pressed =
             playing && Input::singleton().is_action_just_pressed(&setup.actions.attack);
+        let magic_pressed = std::mem::take(&mut self.magic_pressed) && playing;
         let delta = delta as f32;
         let max_health = values.hero().max_health();
         match &mut self.health {
             Some(health) => health.set_max(max_health),
             None => self.health = Some(Health::new(max_health)),
         }
+        let max_charges = values.magic().max_charges();
+        match &mut self.magic {
+            Some(magic) => magic.set_max(max_charges),
+            None => self.magic = Some(MagicMeter::new(max_charges)),
+        }
         self.invulnerable.tick(delta);
+        if magic_pressed && can_cast(&self.mode) {
+            self.try_cast(&values);
+        }
         self.slide(&values, delta);
         let mode = std::mem::replace(&mut self.mode, HeroMode::Free);
         self.mode = match mode {
@@ -214,13 +273,162 @@ impl INode2D for Hero {
                     HeroMode::HitStun(stun)
                 }
             }
+            HeroMode::Casting(mut cast) => {
+                if cast.timer.tick(delta) {
+                    self.impact(&values, cast.charges);
+                    HeroMode::Free
+                } else {
+                    HeroMode::Casting(cast)
+                }
+            }
             HeroMode::Dead => HeroMode::Dead,
         };
+        if !self.is_dead() {
+            self.collect_potions(&values);
+        }
     }
 }
 
 #[godot_api]
 impl Hero {
+    /// Magic was pressed while the hero may cast: with charges, the cast starts at once, spending
+    /// them all, dropping a swing or a stun and any slide, freezing everyone else and clearing any
+    /// impact freeze; with none, only `cast_failed_empty` is emitted.
+    fn try_cast(&mut self, values: &TuningValues) {
+        let Some(magic) = &mut self.magic else {
+            return;
+        };
+        if magic.is_empty() {
+            self.signals().cast_failed_empty().emit();
+            return;
+        }
+        let charges = magic.spend_all();
+        let Some(setup) = &self.setup else {
+            return;
+        };
+        let (mut run, mut hit_stop) = (setup.run.clone(), setup.hit_stop.clone());
+        let length = values.magic().cast_time();
+        self.mode = HeroMode::Casting(Cast {
+            timer: Countdown::new(length),
+            length,
+            charges,
+        });
+        self.knockback = None;
+        run.bind_mut().begin_cast();
+        hit_stop.bind_mut().clear();
+        self.signals().cast_started().emit(i64::from(charges));
+        self.announce_magic();
+    }
+
+    /// The cast's impact (research R6): every enemy and dummy whose feet are on screen is hit once
+    /// with the spell's damage; then the freeze ends and `spell_impact` is emitted. Targets are the
+    /// children of the hero's parent (`World`), not the enemies' group, which an entering enemy has
+    /// not joined yet.
+    fn impact(&mut self, values: &TuningValues, charges: u32) {
+        let magic = values.magic();
+        let damage = spell_damage(
+            magic.damage_mode(),
+            magic.damage_per_charge(),
+            magic.flat_damage(),
+            charges,
+        );
+        let x = self.base().get_position().x;
+        let view = self.base().get_viewport_rect();
+        let screen = combat::Rect {
+            left: view.position.x,
+            right: view.position.x + view.size.x,
+            top: view.position.y,
+            bottom: view.position.y + view.size.y,
+        };
+        if let Some(world) = self.base().get_parent() {
+            for child in world.get_children().iter_shared() {
+                let child = match child.try_cast::<Enemy>() {
+                    Ok(mut enemy) => {
+                        let feet = enemy.get_position();
+                        if enemy.bind().is_alive() && on_screen((feet.x, feet.y), &screen) {
+                            enemy.bind_mut().take_spell(damage, x);
+                        }
+                        continue;
+                    }
+                    Err(child) => child,
+                };
+                if let Ok(mut dummy) = child.try_cast::<TrainingDummy>() {
+                    let feet = dummy.get_position();
+                    if on_screen((feet.x, feet.y), &screen) {
+                        dummy.bind_mut().take_spell(x);
+                    }
+                }
+            }
+        }
+        if let Some(setup) = &self.setup {
+            let mut run = setup.run.clone();
+            run.bind_mut().end_cast();
+        }
+        self.signals().spell_impact().emit();
+    }
+
+    /// Emits `magic_changed` with the meter's charges and maximum.
+    fn announce_magic(&mut self) {
+        if let Some(magic) = self.magic {
+            self.signals()
+                .magic_changed()
+                .emit(i64::from(magic.charges()), i64::from(magic.max()));
+        }
+    }
+
+    /// Collects every potion the hero stands on at about its depth that would do something
+    /// (research R9): a health potion heals, a magic one adds a charge. A potion that would do
+    /// nothing stays on the ground.
+    fn collect_potions(&mut self, values: &TuningValues) {
+        let Some(hero_box) = self.hurtbox_rect() else {
+            return;
+        };
+        let feet_y = self.base().get_position().y;
+        let potions = self.base().get_tree().get_nodes_in_group(POTIONS_GROUP);
+        for node in potions.iter_shared() {
+            let Ok(mut potion) = node.try_cast::<Potion>() else {
+                continue;
+            };
+            if potion.is_queued_for_deletion() {
+                continue;
+            }
+            let (kind, potion_box, potion_feet_y) = {
+                let potion = potion.bind();
+                let Some(potion_box) = potion.pickup_rect() else {
+                    continue;
+                };
+                (potion.potion_kind(), potion_box, potion.feet_y())
+            };
+            let reached = can_collect(
+                &hero_box,
+                feet_y,
+                &potion_box,
+                potion_feet_y,
+                values.depth_tolerance(),
+            );
+            let health_full = self.health.is_none_or(|h| h.is_full());
+            let meter_full = self.magic.is_none_or(|m| m.is_full());
+            if !reached || !potion_useful(kind, health_full, meter_full) {
+                continue;
+            }
+            match kind {
+                PotionKind::Health => {
+                    if let Some(health) = &mut self.health {
+                        health.heal(values.potions().heal_amount());
+                    }
+                }
+                PotionKind::Magic => {
+                    if let Some(magic) = &mut self.magic {
+                        magic.add_charge();
+                    }
+                    self.announce_magic();
+                }
+            }
+            potion.queue_free();
+            self.signals().potion_collected().emit(&kind.to_godot());
+        }
+    }
+
     /// Emitted when a blow lands on the hero. `direction` is the push (−1 left, 1 right);
     /// `strength` is the knockback distance in pixels. Handlers must not call back into the hero.
     #[signal]
@@ -230,6 +438,79 @@ impl Hero {
     /// into the hero.
     #[signal]
     fn died();
+
+    /// Emitted when the hero's charges change (a potion, a cast, F9), with the charges and the most
+    /// it can hold. Handlers must not call back into the hero.
+    #[signal]
+    fn magic_changed(charges: i64, max: i64);
+
+    /// Emitted when the hero collects a potion, with its kind (`"Health"` or `"Magic"`). Handlers
+    /// must not call back into the hero.
+    #[signal]
+    fn potion_collected(kind: GString);
+
+    /// Emitted when a cast starts, with the charges it spends. Handlers must not call back into the
+    /// hero.
+    #[signal]
+    fn cast_started(charges: i64);
+
+    /// Emitted when a cast's impact has resolved and the freeze has ended. Handlers must not call
+    /// back into the hero.
+    #[signal]
+    fn spell_impact();
+
+    /// Emitted when magic is pressed with no charges; nothing else happens. Handlers must not call
+    /// back into the hero.
+    #[signal]
+    fn cast_failed_empty();
+
+    /// Whether the hero is casting the spell.
+    #[func]
+    pub fn is_casting(&self) -> bool {
+        matches!(self.mode, HeroMode::Casting(_))
+    }
+
+    /// How far the cast is from its start (0) to its impact (1); 0 when not casting. Drives the
+    /// screen flash.
+    #[func]
+    pub fn cast_progress(&self) -> f32 {
+        match &self.mode {
+            HeroMode::Casting(cast) if cast.length > 0.0 => {
+                (1.0 - cast.timer.remaining() / cast.length).clamp(0.0, 1.0)
+            }
+            HeroMode::Free
+            | HeroMode::Attacking(_)
+            | HeroMode::HitStun(_)
+            | HeroMode::Casting(_)
+            | HeroMode::Dead => 0.0,
+        }
+    }
+
+    /// Magic charges held, for the meter; 0 before the first tick with tuning.
+    #[func]
+    pub fn charges(&self) -> i64 {
+        self.magic.map_or(0, |m| i64::from(m.charges()))
+    }
+
+    /// The most charges the hero can hold, for the meter's pips; 0 before the first tick with
+    /// tuning.
+    #[func]
+    pub fn max_charges(&self) -> i64 {
+        self.magic.map_or(0, |m| i64::from(m.max()))
+    }
+
+    /// Fills the magic meter (the F9 cheat). Does nothing once the hero has fallen or before the
+    /// first tick with tuning.
+    #[func]
+    pub fn refill_magic(&mut self) {
+        if self.is_dead() {
+            return;
+        }
+        if let Some(magic) = &mut self.magic {
+            magic.refill();
+            self.announce_magic();
+        }
+    }
 
     /// Targets hit since the game started, one per target per swing. Shown by the debug overlay.
     #[func]
@@ -260,7 +541,10 @@ impl Hero {
     pub fn is_dead(&self) -> bool {
         match self.mode {
             HeroMode::Dead => true,
-            HeroMode::Free | HeroMode::Attacking(_) | HeroMode::HitStun(_) => false,
+            HeroMode::Free
+            | HeroMode::Attacking(_)
+            | HeroMode::HitStun(_)
+            | HeroMode::Casting(_) => false,
         }
     }
 
@@ -294,7 +578,9 @@ impl Hero {
                     .map_or_else(Rect2::default, |a| to_rect2(&a.attack_box())),
                 AttackPhase::WindUp | AttackPhase::Recovery => Rect2::default(),
             },
-            HeroMode::Free | HeroMode::HitStun(_) | HeroMode::Dead => Rect2::default(),
+            HeroMode::Free | HeroMode::HitStun(_) | HeroMode::Casting(_) | HeroMode::Dead => {
+                Rect2::default()
+            }
         }
     }
 
@@ -337,7 +623,7 @@ impl Hero {
             hurtbox: self.hurtbox_rect()?,
             feet_y: self.base().get_position().y,
             alive: !self.is_dead(),
-            invulnerable: self.invulnerable.is_running(),
+            invulnerable: self.invulnerable.is_running() || self.is_casting(),
         })
     }
 
@@ -345,7 +631,7 @@ impl Hero {
     /// starts and `was_hit` is emitted; a surviving hero is stunned (any swing is cancelled) and
     /// becomes invulnerable for a while; a killed hero falls and the run ends.
     pub fn take_hit(&mut self, hit: &Hit<InstanceId>) {
-        if self.is_dead() || self.invulnerable.is_running() {
+        if self.is_dead() || self.invulnerable.is_running() || self.is_casting() {
             return;
         }
         let Some(setup) = &self.setup else {
@@ -594,5 +880,37 @@ impl Hero {
                 "child `{BODY_PATH}` must have a polygon wider than 0, but its width is {width}"
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fighter::KnockbackSpec;
+
+    #[test]
+    fn a_cast_starts_from_walking_a_swing_or_a_stun_but_not_while_casting_or_fallen() {
+        let swing = Swing::new(AttackSpec {
+            wind_up: 0.07,
+            active: 0.09,
+            recovery: 0.2,
+            reach: 65.0,
+            height: 55.0,
+            damage: 9.0,
+            knockback: KnockbackSpec {
+                distance: 50.0,
+                time: 0.15,
+            },
+        });
+        let cast = Cast {
+            timer: Countdown::new(0.5),
+            length: 0.5,
+            charges: 2,
+        };
+        assert!(can_cast(&HeroMode::Free));
+        assert!(can_cast(&HeroMode::Attacking(swing)));
+        assert!(can_cast(&HeroMode::HitStun(Countdown::new(0.2))));
+        assert!(!can_cast(&HeroMode::Casting(cast)));
+        assert!(!can_cast(&HeroMode::Dead));
     }
 }
